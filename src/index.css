@@ -1,0 +1,79 @@
+@import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
+
+@layer base {
+  :root {
+    --primary: #DD2A2A;
+    --primary-hover: #b91c1c;
+    --primary-light: #FEE2E2;
+    --background: #F0F3FB;
+    --surface: #FFFFFF;
+    --text-primary: #484C72;
+    --text-secondary: #6B7280;
+    --border: #E2E8F0;
+  }
+
+  body {
+    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+    background-color: var(--background);
+    color: var(--text-primary);
+  }
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Custom scrollbars for high-density ERP data tables */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #F1F5F9;
+}
+::-webkit-scrollbar-thumb {
+  background: #CBD5E1;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94A3B8;
+}
+
+/* Institutional Clean Print Media Styling */
+@media print {
+  body {
+    background: #ffffff !important;
+    color: #0f172a !important;
+  }
+
+  /* Hide app navigation and chrome */
+  header,
+  aside,
+  .print-hide,
+  button,
+  .no-print {
+    display: none !important;
+  }
+
+  /* Modal overlay reset for native print */
+  .fixed.inset-0.z-50 {
+    position: static !important;
+    background: transparent !important;
+    backdrop-filter: none !important;
+    padding: 0 !important;
+    height: auto !important;
+    max-height: none !important;
+    display: block !important;
+  }
+
+  .printable-document-root {
+    box-shadow: none !important;
+    border: none !important;
+    max-width: 100% !important;
+    width: 100% !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+}
+

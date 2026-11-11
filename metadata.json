@@ -1,0 +1,6 @@
+{
+  "name": "Enterprise Campus Management System (Campus ERP)",
+  "description": "Multi-campus enterprise resource planning system with granular RBAC, HRMS, TMS, Academics, Admissions, Finance, Payroll, Inventory, and multi-level approval workflows.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
