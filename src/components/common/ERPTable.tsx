@@ -6,7 +6,7 @@
 import React, { useState, useMemo } from 'react';
 import { Search, Download, Printer, ChevronLeft, ChevronRight, ArrowUpDown, ChevronDown, FileDown, Loader2 } from 'lucide-react';
 import { printElement } from '../../utils/printHelper';
-import { exportElementToPdf } from '../../utils/pdfExport';
+import { exportElementToPdf, getDynamicPdfFilename } from '../../utils/pdfExport';
 
 
 export interface Column<T> {
@@ -125,6 +125,8 @@ export function ERPTable<T extends { id?: string | number }>({
     document.body.removeChild(link);
   };
 
+  const [isExportingPdf, setIsExportingPdf] = useState(false);
+
   const tableContainerId = `erp-table-${filename.replace(/[^a-zA-Z0-9_-]/g, '_')}`;
 
   const handlePrint = () => {
@@ -132,6 +134,23 @@ export function ERPTable<T extends { id?: string | number }>({
       title: title || 'Campus ERP Ledger Report',
       landscape: true,
     });
+  };
+
+  const handleExportPDF = async () => {
+    setIsExportingPdf(true);
+    try {
+      const dynamicFilename = getDynamicPdfFilename(filename);
+      await exportElementToPdf(tableContainerId, {
+        title: title || 'Campus ERP Ledger Report',
+        moduleName: title || 'Ledger Report',
+        filename: dynamicFilename.replace(/\.pdf$/i, ''),
+        landscape: true,
+      });
+    } catch (err) {
+      console.error('Failed to export table PDF:', err);
+    } finally {
+      setIsExportingPdf(false);
+    }
   };
 
   return (
@@ -170,6 +189,21 @@ export function ERPTable<T extends { id?: string | number }>({
           >
             <Download className="w-3.5 h-3.5 text-slate-500" />
             <span>Export</span>
+          </button>
+
+          {/* PDF Export Button */}
+          <button
+            onClick={handleExportPDF}
+            disabled={isExportingPdf}
+            title="Export as PDF"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg transition-colors shrink-0 disabled:opacity-50"
+          >
+            {isExportingPdf ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin text-[#DD2A2A]" />
+            ) : (
+              <FileDown className="w-3.5 h-3.5 text-[#DD2A2A]" />
+            )}
+            <span>PDF</span>
           </button>
 
           {/* Print Button */}

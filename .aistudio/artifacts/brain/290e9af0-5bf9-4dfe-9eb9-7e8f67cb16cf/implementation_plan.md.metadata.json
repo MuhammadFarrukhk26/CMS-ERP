@@ -1,6 +1,0 @@
-{
-  "summary":  "Comprehensive architecture and implementation plan for the Enterprise Campus Management System (Campus ERP), detailing the MERN architecture, RBAC engine, all 10 core modules (HRMS, TMS, Academics, Admissions, Inventory, Finance, Payroll, Reports, Notifications, Audit), approval workflows, and UI design specifications.",
-  "updatedAt":  "2026-11-10T11:42:37.908054218Z",
-  "requestFeedback":  true,
-  "userFacing":  true
-}

@@ -17,6 +17,7 @@ import {
   X,
   CreditCard,
   Plus,
+  AlertCircle,
 } from 'lucide-react';
 import { ERPTable, Column } from '../../components/common/ERPTable';
 import { StatusBadge } from '../../components/common/StatusBadge';
@@ -24,6 +25,14 @@ import { ApprovalModal } from '../../components/common/ApprovalModal';
 import { api } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import { Employee, LeaveApplication, Department } from '../../types';
+import {
+  validateCnic,
+  validateEmail,
+  validatePhone,
+  validateName,
+  validateAmount,
+  validateDateRange,
+} from '../../utils/validators';
 
 export const EmployeeManagement: React.FC = () => {
   const { currentCampus, hasPermission, currentUser } = useAuth();
@@ -66,6 +75,9 @@ export const EmployeeManagement: React.FC = () => {
     reason: '',
   });
 
+  const [empErrors, setEmpErrors] = useState<Record<string, string>>({});
+  const [leaveErrors, setLeaveErrors] = useState<Record<string, string>>({});
+
   const canCreateEmployee = hasPermission('hrms', 'create');
   const canApplyLeave = hasPermission('hrms', 'submit') || hasPermission('hrms', 'create');
 
@@ -86,19 +98,100 @@ export const EmployeeManagement: React.FC = () => {
     loadData();
   }, [currentCampus?.id, deptFilter]);
 
+  const validateEmpField = (field: string, value: any) => {
+    let err: string | undefined;
+    switch (field) {
+      case 'firstName':
+        err = validateName(value, 'First name', 2).error;
+        break;
+      case 'lastName':
+        err = validateName(value, 'Last name', 2).error;
+        break;
+      case 'email':
+        err = validateEmail(value).error;
+        break;
+      case 'phone':
+        err = validatePhone(value).error;
+        break;
+      case 'cnic':
+        err = validateCnic(value).error;
+        break;
+      case 'designation':
+        err = validateName(value, 'Designation', 2).error;
+        break;
+      case 'salary':
+        err = validateAmount(value, 15000, 5000000, 'Monthly salary').error;
+        break;
+      case 'education':
+        err = validateName(value, 'Highest qualification', 2).error;
+        break;
+    }
+    setEmpErrors((prev) => {
+      const updated = { ...prev };
+      if (err) updated[field] = err;
+      else delete updated[field];
+      return updated;
+    });
+  };
+
+  const validateEmployeeAll = (): boolean => {
+    const errors: Record<string, string> = {};
+    const fn = validateName(newEmp.firstName, 'First name', 2).error;
+    if (fn) errors.firstName = fn;
+    const ln = validateName(newEmp.lastName, 'Last name', 2).error;
+    if (ln) errors.lastName = ln;
+    const em = validateEmail(newEmp.email).error;
+    if (em) errors.email = em;
+    const ph = validatePhone(newEmp.phone).error;
+    if (ph) errors.phone = ph;
+    const cn = validateCnic(newEmp.cnic).error;
+    if (cn) errors.cnic = cn;
+    const des = validateName(newEmp.designation, 'Designation', 2).error;
+    if (des) errors.designation = des;
+    const sal = validateAmount(newEmp.salary, 15000, 5000000, 'Monthly salary').error;
+    if (sal) errors.salary = sal;
+    const edu = validateName(newEmp.education, 'Highest qualification', 2).error;
+    if (edu) errors.education = edu;
+
+    setEmpErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  const validateLeaveAll = (): boolean => {
+    const errors: Record<string, string> = {};
+    if (!newLeave.employeeId) {
+      errors.employeeId = 'Please select a staff member.';
+    }
+    const dateCheck = validateDateRange(newLeave.startDate, newLeave.endDate, 'Start Date', 'End Date').error;
+    if (dateCheck) errors.endDate = dateCheck;
+    if (!newLeave.reason || newLeave.reason.trim().length < 5) {
+      errors.reason = 'Please state a detailed reason for leave (min 5 characters).';
+    }
+    if (newLeave.days < 1) {
+      errors.days = 'Leave must be at least 1 day.';
+    }
+    setLeaveErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
   const handleCreateEmployee = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!validateEmployeeAll()) return;
     await api.createEmployee({
       ...newEmp,
       campusId: currentCampus?.id || 'camp-main',
     } as any);
     setIsAddEmployeeOpen(false);
+    setEmpErrors({});
     await loadData();
   };
 
   const handleApplyLeave = async (e: React.FormEvent) => {
     e.preventDefault();
-    const emp = employees.find((e) => e.id === newLeave.employeeId) || employees[0];
+    if (!validateLeaveAll()) return;
+    const emp = employees.find((e) => e.id === newLeave.employeeId);
+    if (!emp) return;
+
     await api.applyLeave({
       employeeId: emp.id,
       employeeName: emp.fullName,
@@ -111,6 +204,7 @@ export const EmployeeManagement: React.FC = () => {
       reason: newLeave.reason,
     });
     setIsApplyLeaveOpen(false);
+    setLeaveErrors({});
     setNewLeave({
       employeeId: '',
       leaveType: 'Annual',
@@ -393,97 +487,188 @@ export const EmployeeManagement: React.FC = () => {
             </div>
 
             <form onSubmit={handleCreateEmployee} className="p-5 space-y-4 text-xs">
+              {Object.keys(empErrors).length > 0 && (
+                <div className="p-2.5 bg-rose-50 border border-rose-200 rounded-lg text-rose-700 text-xs flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
+                  <span>Please resolve all field errors highlighted below before proceeding.</span>
+                </div>
+              )}
+
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block font-bold text-slate-700 uppercase tracking-wider mb-1">
-                    First Name
+                    First Name *
                   </label>
                   <input
                     type="text"
                     required
                     value={newEmp.firstName}
-                    onChange={(e) => setNewEmp({ ...newEmp, firstName: e.target.value })}
+                    onChange={(e) => {
+                      setNewEmp({ ...newEmp, firstName: e.target.value });
+                      validateEmpField('firstName', e.target.value);
+                    }}
+                    onBlur={(e) => validateEmpField('firstName', e.target.value)}
                     placeholder="e.g. Asim"
-                    className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:ring-1 focus:ring-[#DD2A2A]"
+                    className={`w-full p-2 bg-slate-50 border rounded-lg text-slate-800 focus:outline-none transition-colors ${
+                      empErrors.firstName
+                        ? 'border-rose-400 focus:ring-1 focus:ring-rose-500 bg-rose-50/20'
+                        : 'border-slate-200 focus:ring-1 focus:ring-[#DD2A2A]'
+                    }`}
                   />
+                  {empErrors.firstName && (
+                    <p className="text-[11px] text-rose-600 mt-1 flex items-center gap-1 font-medium">
+                      <AlertCircle className="w-3 h-3 shrink-0" />
+                      <span>{empErrors.firstName}</span>
+                    </p>
+                  )}
                 </div>
                 <div>
                   <label className="block font-bold text-slate-700 uppercase tracking-wider mb-1">
-                    Last Name
+                    Last Name *
                   </label>
                   <input
                     type="text"
                     required
                     value={newEmp.lastName}
-                    onChange={(e) => setNewEmp({ ...newEmp, lastName: e.target.value })}
+                    onChange={(e) => {
+                      setNewEmp({ ...newEmp, lastName: e.target.value });
+                      validateEmpField('lastName', e.target.value);
+                    }}
+                    onBlur={(e) => validateEmpField('lastName', e.target.value)}
                     placeholder="e.g. Munir"
-                    className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:ring-1 focus:ring-[#DD2A2A]"
+                    className={`w-full p-2 bg-slate-50 border rounded-lg text-slate-800 focus:outline-none transition-colors ${
+                      empErrors.lastName
+                        ? 'border-rose-400 focus:ring-1 focus:ring-rose-500 bg-rose-50/20'
+                        : 'border-slate-200 focus:ring-1 focus:ring-[#DD2A2A]'
+                    }`}
                   />
+                  {empErrors.lastName && (
+                    <p className="text-[11px] text-rose-600 mt-1 flex items-center gap-1 font-medium">
+                      <AlertCircle className="w-3 h-3 shrink-0" />
+                      <span>{empErrors.lastName}</span>
+                    </p>
+                  )}
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block font-bold text-slate-700 uppercase tracking-wider mb-1">
-                    University Email
+                    University Email *
                   </label>
                   <input
                     type="email"
                     required
                     value={newEmp.email}
-                    onChange={(e) => setNewEmp({ ...newEmp, email: e.target.value })}
+                    onChange={(e) => {
+                      setNewEmp({ ...newEmp, email: e.target.value });
+                      validateEmpField('email', e.target.value);
+                    }}
+                    onBlur={(e) => validateEmpField('email', e.target.value)}
                     placeholder="e.g. asim.munir@campus.edu"
-                    className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:ring-1 focus:ring-[#DD2A2A]"
+                    className={`w-full p-2 bg-slate-50 border rounded-lg text-slate-800 focus:outline-none transition-colors ${
+                      empErrors.email
+                        ? 'border-rose-400 focus:ring-1 focus:ring-rose-500 bg-rose-50/20'
+                        : 'border-slate-200 focus:ring-1 focus:ring-[#DD2A2A]'
+                    }`}
                   />
+                  {empErrors.email && (
+                    <p className="text-[11px] text-rose-600 mt-1 flex items-center gap-1 font-medium">
+                      <AlertCircle className="w-3 h-3 shrink-0" />
+                      <span>{empErrors.email}</span>
+                    </p>
+                  )}
                 </div>
                 <div>
                   <label className="block font-bold text-slate-700 uppercase tracking-wider mb-1">
-                    Contact Phone
+                    Contact Phone *
                   </label>
                   <input
                     type="text"
                     required
                     value={newEmp.phone}
-                    onChange={(e) => setNewEmp({ ...newEmp, phone: e.target.value })}
-                    placeholder="+92 300 1234567"
-                    className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:ring-1 focus:ring-[#DD2A2A]"
+                    onChange={(e) => {
+                      setNewEmp({ ...newEmp, phone: e.target.value });
+                      validateEmpField('phone', e.target.value);
+                    }}
+                    onBlur={(e) => validateEmpField('phone', e.target.value)}
+                    placeholder="0300-1234567"
+                    className={`w-full p-2 bg-slate-50 border rounded-lg text-slate-800 focus:outline-none transition-colors ${
+                      empErrors.phone
+                        ? 'border-rose-400 focus:ring-1 focus:ring-rose-500 bg-rose-50/20'
+                        : 'border-slate-200 focus:ring-1 focus:ring-[#DD2A2A]'
+                    }`}
                   />
+                  {empErrors.phone && (
+                    <p className="text-[11px] text-rose-600 mt-1 flex items-center gap-1 font-medium">
+                      <AlertCircle className="w-3 h-3 shrink-0" />
+                      <span>{empErrors.phone}</span>
+                    </p>
+                  )}
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block font-bold text-slate-700 uppercase tracking-wider mb-1">
-                    CNIC / National ID
+                    CNIC / National ID (13 digits) *
                   </label>
                   <input
                     type="text"
                     required
                     value={newEmp.cnic}
-                    onChange={(e) => setNewEmp({ ...newEmp, cnic: e.target.value })}
+                    onChange={(e) => {
+                      setNewEmp({ ...newEmp, cnic: e.target.value });
+                      validateEmpField('cnic', e.target.value);
+                    }}
+                    onBlur={(e) => validateEmpField('cnic', e.target.value)}
                     placeholder="37405-1234567-9"
-                    className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:ring-1 focus:ring-[#DD2A2A]"
+                    className={`w-full p-2 bg-slate-50 border rounded-lg text-slate-800 focus:outline-none transition-colors ${
+                      empErrors.cnic
+                        ? 'border-rose-400 focus:ring-1 focus:ring-rose-500 bg-rose-50/20'
+                        : 'border-slate-200 focus:ring-1 focus:ring-[#DD2A2A]'
+                    }`}
                   />
+                  {empErrors.cnic && (
+                    <p className="text-[11px] text-rose-600 mt-1 flex items-center gap-1 font-medium">
+                      <AlertCircle className="w-3 h-3 shrink-0" />
+                      <span>{empErrors.cnic}</span>
+                    </p>
+                  )}
                 </div>
                 <div>
                   <label className="block font-bold text-slate-700 uppercase tracking-wider mb-1">
-                    Designation
+                    Designation *
                   </label>
                   <input
                     type="text"
                     required
                     value={newEmp.designation}
-                    onChange={(e) => setNewEmp({ ...newEmp, designation: e.target.value })}
+                    onChange={(e) => {
+                      setNewEmp({ ...newEmp, designation: e.target.value });
+                      validateEmpField('designation', e.target.value);
+                    }}
+                    onBlur={(e) => validateEmpField('designation', e.target.value)}
                     placeholder="e.g. Assistant Professor"
-                    className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:ring-1 focus:ring-[#DD2A2A]"
+                    className={`w-full p-2 bg-slate-50 border rounded-lg text-slate-800 focus:outline-none transition-colors ${
+                      empErrors.designation
+                        ? 'border-rose-400 focus:ring-1 focus:ring-rose-500 bg-rose-50/20'
+                        : 'border-slate-200 focus:ring-1 focus:ring-[#DD2A2A]'
+                    }`}
                   />
+                  {empErrors.designation && (
+                    <p className="text-[11px] text-rose-600 mt-1 flex items-center gap-1 font-medium">
+                      <AlertCircle className="w-3 h-3 shrink-0" />
+                      <span>{empErrors.designation}</span>
+                    </p>
+                  )}
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block font-bold text-slate-700 uppercase tracking-wider mb-1">
-                    Department
+                    Department *
                   </label>
                   <select
                     value={newEmp.departmentId}
@@ -499,36 +684,69 @@ export const EmployeeManagement: React.FC = () => {
                 </div>
                 <div>
                   <label className="block font-bold text-slate-700 uppercase tracking-wider mb-1">
-                    Monthly Gross Salary (PKR)
+                    Monthly Gross Salary (PKR) *
                   </label>
                   <input
                     type="number"
                     required
+                    min="15000"
                     value={newEmp.salary}
-                    onChange={(e) => setNewEmp({ ...newEmp, salary: Number(e.target.value) })}
-                    className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:ring-1 focus:ring-[#DD2A2A]"
+                    onChange={(e) => {
+                      const val = Number(e.target.value);
+                      setNewEmp({ ...newEmp, salary: val });
+                      validateEmpField('salary', val);
+                    }}
+                    onBlur={(e) => validateEmpField('salary', Number(e.target.value))}
+                    className={`w-full p-2 bg-slate-50 border rounded-lg text-slate-800 focus:outline-none transition-colors ${
+                      empErrors.salary
+                        ? 'border-rose-400 focus:ring-1 focus:ring-rose-500 bg-rose-50/20'
+                        : 'border-slate-200 focus:ring-1 focus:ring-[#DD2A2A]'
+                    }`}
                   />
+                  {empErrors.salary && (
+                    <p className="text-[11px] text-rose-600 mt-1 flex items-center gap-1 font-medium">
+                      <AlertCircle className="w-3 h-3 shrink-0" />
+                      <span>{empErrors.salary}</span>
+                    </p>
+                  )}
                 </div>
               </div>
 
               <div>
                 <label className="block font-bold text-slate-700 uppercase tracking-wider mb-1">
-                  Highest Qualification & Education
+                  Highest Qualification & Education *
                 </label>
                 <input
                   type="text"
                   required
                   value={newEmp.education}
-                  onChange={(e) => setNewEmp({ ...newEmp, education: e.target.value })}
+                  onChange={(e) => {
+                    setNewEmp({ ...newEmp, education: e.target.value });
+                    validateEmpField('education', e.target.value);
+                  }}
+                  onBlur={(e) => validateEmpField('education', e.target.value)}
                   placeholder="e.g. Ph.D. in Computer Science (Stanford)"
-                  className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:ring-1 focus:ring-[#DD2A2A]"
+                  className={`w-full p-2 bg-slate-50 border rounded-lg text-slate-800 focus:outline-none transition-colors ${
+                    empErrors.education
+                      ? 'border-rose-400 focus:ring-1 focus:ring-rose-500 bg-rose-50/20'
+                      : 'border-slate-200 focus:ring-1 focus:ring-[#DD2A2A]'
+                  }`}
                 />
+                {empErrors.education && (
+                  <p className="text-[11px] text-rose-600 mt-1 flex items-center gap-1 font-medium">
+                    <AlertCircle className="w-3 h-3 shrink-0" />
+                    <span>{empErrors.education}</span>
+                  </p>
+                )}
               </div>
 
               <div className="pt-3 border-t border-slate-200 flex justify-end gap-2">
                 <button
                   type="button"
-                  onClick={() => setIsAddEmployeeOpen(false)}
+                  onClick={() => {
+                    setIsAddEmployeeOpen(false);
+                    setEmpErrors({});
+                  }}
                   className="px-3 py-1.5 font-semibold text-slate-600 hover:bg-slate-100 rounded-lg"
                 >
                   Cancel
@@ -552,7 +770,10 @@ export const EmployeeManagement: React.FC = () => {
             <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
               <h3 className="text-sm font-bold text-slate-900">Submit Leave Application</h3>
               <button
-                onClick={() => setIsApplyLeaveOpen(false)}
+                onClick={() => {
+                  setIsApplyLeaveOpen(false);
+                  setLeaveErrors({});
+                }}
                 className="p-1 rounded text-slate-400 hover:text-slate-600"
               >
                 <X className="w-4 h-4" />
@@ -560,15 +781,33 @@ export const EmployeeManagement: React.FC = () => {
             </div>
 
             <form onSubmit={handleApplyLeave} className="p-5 space-y-3.5 text-xs">
+              {Object.keys(leaveErrors).length > 0 && (
+                <div className="p-2.5 bg-rose-50 border border-rose-200 rounded-lg text-rose-700 text-xs flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
+                  <span>Please resolve the errors highlighted below.</span>
+                </div>
+              )}
+
               <div>
                 <label className="block font-bold text-slate-700 uppercase tracking-wider mb-1">
-                  Select Staff Member
+                  Select Staff Member *
                 </label>
                 <select
                   required
                   value={newLeave.employeeId}
-                  onChange={(e) => setNewLeave({ ...newLeave, employeeId: e.target.value })}
-                  className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:ring-1 focus:ring-[#DD2A2A]"
+                  onChange={(e) => {
+                    setNewLeave({ ...newLeave, employeeId: e.target.value });
+                    if (e.target.value) {
+                      setLeaveErrors((prev) => {
+                        const copy = { ...prev };
+                        delete copy.employeeId;
+                        return copy;
+                      });
+                    }
+                  }}
+                  className={`w-full p-2 bg-slate-50 border rounded-lg text-slate-800 focus:outline-none transition-colors ${
+                    leaveErrors.employeeId ? 'border-rose-400 bg-rose-50/20' : 'border-slate-200 focus:ring-1 focus:ring-[#DD2A2A]'
+                  }`}
                 >
                   <option value="">-- Choose Employee --</option>
                   {employees.map((e) => (
@@ -577,6 +816,12 @@ export const EmployeeManagement: React.FC = () => {
                     </option>
                   ))}
                 </select>
+                {leaveErrors.employeeId && (
+                  <p className="text-[11px] text-rose-600 mt-1 flex items-center gap-1 font-medium">
+                    <AlertCircle className="w-3 h-3 shrink-0" />
+                    <span>{leaveErrors.employeeId}</span>
+                  </p>
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -602,60 +847,116 @@ export const EmployeeManagement: React.FC = () => {
                   <input
                     type="number"
                     min="1"
-                    max="30"
+                    max="60"
                     required
                     value={newLeave.days}
                     onChange={(e) => setNewLeave({ ...newLeave, days: Number(e.target.value) })}
                     className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:ring-1 focus:ring-[#DD2A2A]"
                   />
+                  {leaveErrors.days && (
+                    <p className="text-[11px] text-rose-600 mt-1 font-medium">{leaveErrors.days}</p>
+                  )}
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block font-bold text-slate-700 uppercase tracking-wider mb-1">
-                    Start Date
+                    Start Date *
                   </label>
                   <input
                     type="date"
                     required
                     value={newLeave.startDate}
-                    onChange={(e) => setNewLeave({ ...newLeave, startDate: e.target.value })}
+                    onChange={(e) => {
+                      const newStart = e.target.value;
+                      const start = new Date(newStart).getTime();
+                      const end = new Date(newLeave.endDate).getTime();
+                      const calculatedDays = (!isNaN(start) && !isNaN(end) && end >= start)
+                        ? Math.max(1, Math.round((end - start) / (1000 * 60 * 60 * 24)) + 1)
+                        : newLeave.days;
+                      setNewLeave({ ...newLeave, startDate: newStart, days: calculatedDays });
+                    }}
                     className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:ring-1 focus:ring-[#DD2A2A]"
                   />
                 </div>
                 <div>
                   <label className="block font-bold text-slate-700 uppercase tracking-wider mb-1">
-                    End Date
+                    End Date *
                   </label>
                   <input
                     type="date"
                     required
                     value={newLeave.endDate}
-                    onChange={(e) => setNewLeave({ ...newLeave, endDate: e.target.value })}
-                    className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:ring-1 focus:ring-[#DD2A2A]"
+                    onChange={(e) => {
+                      const newEnd = e.target.value;
+                      const start = new Date(newLeave.startDate).getTime();
+                      const end = new Date(newEnd).getTime();
+                      const calculatedDays = (!isNaN(start) && !isNaN(end) && end >= start)
+                        ? Math.max(1, Math.round((end - start) / (1000 * 60 * 60 * 24)) + 1)
+                        : newLeave.days;
+                      setNewLeave({ ...newLeave, endDate: newEnd, days: calculatedDays });
+                      if (end < start) {
+                        setLeaveErrors((prev) => ({ ...prev, endDate: 'End Date cannot be earlier than Start Date.' }));
+                      } else {
+                        setLeaveErrors((prev) => {
+                          const copy = { ...prev };
+                          delete copy.endDate;
+                          return copy;
+                        });
+                      }
+                    }}
+                    className={`w-full p-2 bg-slate-50 border rounded-lg text-slate-800 focus:outline-none transition-colors ${
+                      leaveErrors.endDate ? 'border-rose-400 bg-rose-50/20' : 'border-slate-200 focus:ring-1 focus:ring-[#DD2A2A]'
+                    }`}
                   />
+                  {leaveErrors.endDate && (
+                    <p className="text-[11px] text-rose-600 mt-1 flex items-center gap-1 font-medium">
+                      <AlertCircle className="w-3 h-3 shrink-0" />
+                      <span>{leaveErrors.endDate}</span>
+                    </p>
+                  )}
                 </div>
               </div>
 
               <div>
                 <label className="block font-bold text-slate-700 uppercase tracking-wider mb-1">
-                  Reason & Arrangements
+                  Reason & Arrangements *
                 </label>
                 <textarea
                   rows={3}
                   required
                   value={newLeave.reason}
-                  onChange={(e) => setNewLeave({ ...newLeave, reason: e.target.value })}
+                  onChange={(e) => {
+                    setNewLeave({ ...newLeave, reason: e.target.value });
+                    if (e.target.value.trim().length >= 5) {
+                      setLeaveErrors((prev) => {
+                        const copy = { ...prev };
+                        delete copy.reason;
+                        return copy;
+                      });
+                    }
+                  }}
                   placeholder="State the purpose of leave and class coverage arrangements..."
-                  className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:ring-1 focus:ring-[#DD2A2A]"
+                  className={`w-full p-2 bg-slate-50 border rounded-lg text-slate-800 focus:outline-none transition-colors ${
+                    leaveErrors.reason ? 'border-rose-400 bg-rose-50/20' : 'border-slate-200 focus:ring-1 focus:ring-[#DD2A2A]'
+                  }`}
                 />
+                {leaveErrors.reason && (
+                  <p className="text-[11px] text-rose-600 mt-1 flex items-center gap-1 font-medium">
+                    <AlertCircle className="w-3 h-3 shrink-0" />
+                    <span>{leaveErrors.reason}</span>
+                  </p>
+                )}
               </div>
 
               <div className="pt-3 border-t border-slate-200 flex justify-end gap-2">
                 <button
                   type="button"
-                  onClick={() => setIsApplyLeaveOpen(false)}
+                  onClick={() => {
+                    setIsApplyLeaveOpen(false);
+                    setLeaveErrors({});
+                  }}
                   className="px-3 py-1.5 font-semibold text-slate-600 hover:bg-slate-100 rounded-lg"
                 >
                   Cancel

@@ -23,6 +23,21 @@ import { ApprovalModal } from '../../components/common/ApprovalModal';
 import { api } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import { ApprovalRequest } from '../../types';
+import {
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  LineChart,
+  Line,
+  PieChart,
+  Pie,
+  Cell,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+} from 'recharts';
 
 interface MainDashboardProps {
   onNavigateTab: (tab: string) => void;
@@ -136,15 +151,15 @@ export const MainDashboard: React.FC<MainDashboardProps> = ({ onNavigateTab }) =
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left 2 cols: Interactive Visualizations */}
         <div className="lg:col-span-2 space-y-6">
-          {/* Revenue vs Admissions Analytics Card */}
+          {/* Admissions & Fee Realization Trends (Recharts BarChart) */}
           <div className="bg-white rounded-xl p-5 border border-slate-200 shadow-xs">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-100 pb-3 mb-4 gap-2">
               <div>
                 <h3 className="text-sm font-bold text-slate-900">
                   Admissions Intake & Fee Realization Trends
                 </h3>
                 <p className="text-xs text-slate-500">
-                  Monthly applicants vs fee challans cleared (2025-2026)
+                  Monthly undergraduate applicants volume vs fee challans cleared rate (2025-2026)
                 </p>
               </div>
               <span className="text-xs font-semibold text-slate-400 font-mono">
@@ -152,103 +167,249 @@ export const MainDashboard: React.FC<MainDashboardProps> = ({ onNavigateTab }) =
               </span>
             </div>
 
-            {/* Custom SVG Bar Chart */}
-            <div className="h-60 w-full flex items-end gap-6 pt-4 px-2">
-              {[
-                { month: 'Oct', applicants: 450, fees: 82 },
-                { month: 'Nov', applicants: 620, fees: 88 },
-                { month: 'Dec', applicants: 850, fees: 94 },
-                { month: 'Jan', applicants: 1100, fees: 91 },
-                { month: 'Feb', applicants: 1420, fees: 96 },
-                { month: 'Mar', applicants: 1680, fees: 98 },
-              ].map((item, idx) => (
-                <div key={idx} className="flex-1 flex flex-col items-center gap-2 h-full justify-end">
-                  <div className="w-full flex items-end justify-center gap-1.5 h-44">
-                    {/* Applicants bar */}
-                    <div
-                      style={{ height: `${(item.applicants / 1700) * 100}%` }}
-                      className="w-1/2 bg-red-100 hover:bg-[#DD2A2A] rounded-t transition-all group relative cursor-pointer"
-                    >
-                      <div className="opacity-0 group-hover:opacity-100 absolute -top-7 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-[10px] py-0.5 px-1.5 rounded pointer-events-none transition-all tabular-nums whitespace-nowrap">
-                        {item.applicants} Applicants
-                      </div>
-                    </div>
-                    {/* Fee % bar */}
-                    <div
-                      style={{ height: `${item.fees}%` }}
-                      className="w-1/2 bg-emerald-200 hover:bg-emerald-600 rounded-t transition-all group relative cursor-pointer"
-                    >
-                      <div className="opacity-0 group-hover:opacity-100 absolute -top-7 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-[10px] py-0.5 px-1.5 rounded pointer-events-none transition-all tabular-nums whitespace-nowrap">
-                        {item.fees}% Collected
-                      </div>
-                    </div>
-                  </div>
-                  <span className="text-xs font-semibold text-slate-500">{item.month}</span>
-                </div>
-              ))}
-            </div>
-
-            <div className="flex items-center justify-center gap-6 pt-4 border-t border-slate-100 text-xs text-slate-600 mt-2">
-              <div className="flex items-center gap-2">
-                <span className="w-3 h-3 rounded-xs bg-[#DD2A2A]" />
-                <span>Undergraduate Applicants Volume</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="w-3 h-3 rounded-xs bg-emerald-600" />
-                <span>Challan Collection Rate (%)</span>
-              </div>
+            <div className="h-64 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  data={[
+                    { month: 'Oct', applicants: 450, collectionRate: 82 },
+                    { month: 'Nov', applicants: 620, collectionRate: 88 },
+                    { month: 'Dec', applicants: 850, collectionRate: 94 },
+                    { month: 'Jan', applicants: 1100, collectionRate: 91 },
+                    { month: 'Feb', applicants: 1420, collectionRate: 96 },
+                    { month: 'Mar', applicants: 1680, collectionRate: 98 },
+                  ]}
+                  margin={{ top: 10, right: 10, left: -15, bottom: 0 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                  <XAxis
+                    dataKey="month"
+                    tick={{ fill: '#64748b', fontSize: 11 }}
+                    axisLine={{ stroke: '#e2e8f0' }}
+                    tickLine={false}
+                  />
+                  <YAxis
+                    yAxisId="left"
+                    tick={{ fill: '#64748b', fontSize: 11 }}
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  <YAxis
+                    yAxisId="right"
+                    orientation="right"
+                    domain={[0, 100]}
+                    unit="%"
+                    tick={{ fill: '#64748b', fontSize: 11 }}
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: '#ffffff',
+                      borderColor: '#e2e8f0',
+                      borderRadius: '0.5rem',
+                      fontSize: '12px',
+                      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+                    }}
+                    formatter={(val: any, name: any) => [
+                      name === 'collectionRate' ? `${val}%` : `${val} Applicants`,
+                      name === 'collectionRate' ? 'Challan Collection' : 'Applicants Volume',
+                    ]}
+                  />
+                  <Legend
+                    verticalAlign="bottom"
+                    iconType="circle"
+                    wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }}
+                  />
+                  <Bar
+                    yAxisId="left"
+                    dataKey="applicants"
+                    name="Applicants Volume"
+                    fill="#DD2A2A"
+                    radius={[4, 4, 0, 0]}
+                    maxBarSize={36}
+                  />
+                  <Bar
+                    yAxisId="right"
+                    dataKey="collectionRate"
+                    name="Challan Collection Rate (%)"
+                    fill="#10B981"
+                    radius={[4, 4, 0, 0]}
+                    maxBarSize={36}
+                  />
+                </BarChart>
+              </ResponsiveContainer>
             </div>
           </div>
 
-          {/* Departmental Metrics Distribution */}
+          {/* Biometric & Classroom Attendance Trends (Recharts LineChart) */}
           <div className="bg-white rounded-xl p-5 border border-slate-200 shadow-xs">
-            <h3 className="text-sm font-bold text-slate-900 mb-1">
-              Academic Faculty & Departmental Distribution
-            </h3>
-            <p className="text-xs text-slate-500 mb-4">
-              Student-faculty ratio and course distribution across academic faculties
-            </p>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-100 pb-3 mb-4 gap-2">
+              <div>
+                <h3 className="text-sm font-bold text-slate-900">
+                  Campus Attendance Percentages
+                </h3>
+                <p className="text-xs text-slate-500">
+                  TMS biometric faculty/staff check-ins vs LMS student session attendance
+                </p>
+              </div>
+              <span className="text-xs font-semibold text-emerald-600 font-mono">
+                Average Rate: 94.6%
+              </span>
+            </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
-              <div className="p-3.5 bg-slate-50 rounded-lg border border-slate-200">
-                <div className="flex items-center justify-between mb-1">
-                  <span className="font-bold text-slate-800">Faculty of Computing</span>
-                  <span className="text-xs font-mono font-bold text-[#DD2A2A]">62%</span>
-                </div>
-                <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
-                  <div className="bg-[#DD2A2A] h-full" style={{ width: '62%' }} />
-                </div>
-                <div className="flex justify-between text-[11px] text-slate-500 mt-2">
-                  <span>CS, SE & Data Science</span>
-                  <span className="tabular-nums">2,450 Students</span>
-                </div>
+            <div className="h-56 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart
+                  data={[
+                    { period: 'Week 1', staff: 95.8, students: 91.2 },
+                    { period: 'Week 2', staff: 96.2, students: 92.5 },
+                    { period: 'Week 3', staff: 94.5, students: 89.4 },
+                    { period: 'Week 4', staff: 97.1, students: 93.8 },
+                    { period: 'Week 5', staff: 96.4, students: 94.2 },
+                    { period: 'Week 6', staff: 97.8, students: 95.1 },
+                  ]}
+                  margin={{ top: 10, right: 15, left: -20, bottom: 0 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                  <XAxis
+                    dataKey="period"
+                    tick={{ fill: '#64748b', fontSize: 11 }}
+                    axisLine={{ stroke: '#e2e8f0' }}
+                    tickLine={false}
+                  />
+                  <YAxis
+                    domain={[80, 100]}
+                    unit="%"
+                    tick={{ fill: '#64748b', fontSize: 11 }}
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: '#ffffff',
+                      borderColor: '#e2e8f0',
+                      borderRadius: '0.5rem',
+                      fontSize: '12px',
+                      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+                    }}
+                    formatter={(val: any) => [`${val}%`]}
+                  />
+                  <Legend
+                    verticalAlign="bottom"
+                    iconType="plainline"
+                    wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="staff"
+                    name="Faculty & Staff Attendance %"
+                    stroke="#DD2A2A"
+                    strokeWidth={2.5}
+                    dot={{ r: 4, fill: '#DD2A2A' }}
+                    activeDot={{ r: 6 }}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="students"
+                    name="Student Session Attendance %"
+                    stroke="#2563EB"
+                    strokeWidth={2.5}
+                    dot={{ r: 4, fill: '#2563EB' }}
+                    activeDot={{ r: 6 }}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          {/* Departmental Enrollment Distribution (Recharts PieChart & Breakdown) */}
+          <div className="bg-white rounded-xl p-5 border border-slate-200 shadow-xs">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-100 pb-3 mb-4 gap-2">
+              <div>
+                <h3 className="text-sm font-bold text-slate-900">
+                  Student Enrollment by Academic Faculty
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Total headcount allocation and degree program capacity
+                </p>
+              </div>
+              <span className="text-xs font-semibold text-slate-600 font-mono">
+                Total Enrolled: 4,730
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
+              <div className="h-52 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={[
+                        { name: 'Faculty of Computing', value: 2450, color: '#DD2A2A' },
+                        { name: 'Faculty of Engineering', value: 840, color: '#2563EB' },
+                        { name: 'Management Sciences', value: 620, color: '#D97706' },
+                        { name: 'Allied Health Sciences', value: 820, color: '#059669' },
+                      ]}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={50}
+                      outerRadius={75}
+                      paddingAngle={3}
+                      dataKey="value"
+                    >
+                      {[
+                        { name: 'Faculty of Computing', value: 2450, color: '#DD2A2A' },
+                        { name: 'Faculty of Engineering', value: 840, color: '#2563EB' },
+                        { name: 'Management Sciences', value: 620, color: '#D97706' },
+                        { name: 'Allied Health Sciences', value: 820, color: '#059669' },
+                      ].map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: '#ffffff',
+                        borderColor: '#e2e8f0',
+                        borderRadius: '0.5rem',
+                        fontSize: '12px',
+                        boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+                      }}
+                      formatter={(val: any, name: any) => [`${val.toLocaleString()} Students`, name]}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
               </div>
 
-              <div className="p-3.5 bg-slate-50 rounded-lg border border-slate-200">
-                <div className="flex items-center justify-between mb-1">
-                  <span className="font-bold text-slate-800">Faculty of Engineering</span>
-                  <span className="text-xs font-mono font-bold text-blue-600">22%</span>
+              <div className="space-y-2.5 text-xs">
+                <div className="p-2.5 bg-slate-50 rounded-lg border border-slate-100 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-[#DD2A2A]" />
+                    <span className="font-semibold text-slate-800">Faculty of Computing</span>
+                  </div>
+                  <span className="font-mono font-bold text-slate-900">2,450 (52%)</span>
                 </div>
-                <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
-                  <div className="bg-blue-600 h-full" style={{ width: '22%' }} />
-                </div>
-                <div className="flex justify-between text-[11px] text-slate-500 mt-2">
-                  <span>Electrical & Mechanical</span>
-                  <span className="tabular-nums">840 Students</span>
-                </div>
-              </div>
 
-              <div className="p-3.5 bg-slate-50 rounded-lg border border-slate-200">
-                <div className="flex items-center justify-between mb-1">
-                  <span className="font-bold text-slate-800">Management Sciences</span>
-                  <span className="text-xs font-mono font-bold text-amber-600">16%</span>
+                <div className="p-2.5 bg-slate-50 rounded-lg border border-slate-100 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-[#2563EB]" />
+                    <span className="font-semibold text-slate-800">Faculty of Engineering</span>
+                  </div>
+                  <span className="font-mono font-bold text-slate-900">840 (18%)</span>
                 </div>
-                <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
-                  <div className="bg-amber-600 h-full" style={{ width: '16%' }} />
+
+                <div className="p-2.5 bg-slate-50 rounded-lg border border-slate-100 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-[#D97706]" />
+                    <span className="font-semibold text-slate-800">Management Sciences</span>
+                  </div>
+                  <span className="font-mono font-bold text-slate-900">620 (13%)</span>
                 </div>
-                <div className="flex justify-between text-[11px] text-slate-500 mt-2">
-                  <span>BBA & MBA Executive</span>
-                  <span className="tabular-nums">620 Students</span>
+
+                <div className="p-2.5 bg-slate-50 rounded-lg border border-slate-100 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-[#059669]" />
+                    <span className="font-semibold text-slate-800">Allied Health Sciences</span>
+                  </div>
+                  <span className="font-mono font-bold text-slate-900">820 (17%)</span>
                 </div>
               </div>
             </div>

@@ -16,6 +16,7 @@ import {
   Users,
   Clock,
   Layers,
+  AlertCircle,
 } from 'lucide-react';
 import { ERPTable, Column } from '../../components/common/ERPTable';
 import { StatusBadge } from '../../components/common/StatusBadge';
@@ -46,6 +47,8 @@ export const AcademicsManagement: React.FC = () => {
     finalExam: 36,
   });
 
+  const [marksError, setMarksError] = useState<string | null>(null);
+
   const canEditMarks = hasPermission('academics', 'edit');
 
   const loadData = async () => {
@@ -73,6 +76,7 @@ export const AcademicsManagement: React.FC = () => {
   }, [currentCampus?.id, selectedOfferingId]);
 
   const handleStartEdit = (entry: MarksEntry) => {
+    setMarksError(null);
     setEditingMarksId(entry.id);
     setMarksForm({
       assignments: entry.assignments,
@@ -83,8 +87,27 @@ export const AcademicsManagement: React.FC = () => {
   };
 
   const handleSaveMarks = async (marksId: string) => {
+    setMarksError(null);
+    if (marksForm.assignments < 0 || marksForm.assignments > 15) {
+      setMarksError('Assignment marks must be between 0 and 15.');
+      return;
+    }
+    if (marksForm.quizzes < 0 || marksForm.quizzes > 15) {
+      setMarksError('Quiz marks must be between 0 and 15.');
+      return;
+    }
+    if (marksForm.midterm < 0 || marksForm.midterm > 30) {
+      setMarksError('Midterm exam marks must be between 0 and 30.');
+      return;
+    }
+    if (marksForm.finalExam < 0 || marksForm.finalExam > 40) {
+      setMarksError('Final exam marks must be between 0 and 40.');
+      return;
+    }
+
     await api.updateStudentMarks(marksId, marksForm);
     setEditingMarksId(null);
+    setMarksError(null);
     await loadData();
   };
 
@@ -404,6 +427,21 @@ export const AcademicsManagement: React.FC = () => {
               Weights: Assignments 15% · Quizzes 15% · Midterm 30% · Final Exam 40%
             </span>
           </div>
+
+          {marksError && (
+            <div className="p-2.5 bg-rose-50 border border-rose-200 rounded-lg text-rose-700 text-xs flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
+                <span>{marksError}</span>
+              </div>
+              <button
+                onClick={() => setMarksError(null)}
+                className="text-xs font-bold text-rose-600 hover:text-rose-800"
+              >
+                Dismiss
+              </button>
+            </div>
+          )}
 
           <ERPTable
             data={marks}

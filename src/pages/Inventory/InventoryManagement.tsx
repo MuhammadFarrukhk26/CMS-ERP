@@ -15,6 +15,7 @@ import {
   FileText,
   Boxes,
   Printer,
+  AlertCircle,
 } from 'lucide-react';
 import { ERPTable, Column } from '../../components/common/ERPTable';
 import { StatusBadge } from '../../components/common/StatusBadge';
@@ -23,6 +24,7 @@ import { PrintDocumentModal } from '../../components/common/PrintDocumentModal';
 import { api } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import { InventoryItem, PurchaseRequisition } from '../../types';
+import { validateName, validateAmount } from '../../utils/validators';
 
 export const InventoryManagement: React.FC = () => {
   const { currentCampus, hasPermission, currentUser } = useAuth();
@@ -35,6 +37,20 @@ export const InventoryManagement: React.FC = () => {
   const [isApprovalOpen, setIsApprovalOpen] = useState(false);
   const [selectedReqForPrint, setSelectedReqForPrint] = useState<any>(null);
   const [isPrintReqOpen, setIsPrintReqOpen] = useState(false);
+  const [isCreateReqOpen, setIsCreateReqOpen] = useState(false);
+
+  // Form
+  const [newReq, setNewReq] = useState({
+    itemName: '',
+    category: 'IT Hardware',
+    quantity: 5,
+    estimatedUnitCost: 25000,
+    urgency: 'Normal' as 'Normal' | 'High' | 'Emergency',
+    justification: '',
+  });
+  const [reqErrors, setReqErrors] = useState<Record<string, string>>({});
+
+  const canSubmitReq = hasPermission('inventory', 'create') || hasPermission('inventory', 'submit');
 
   const loadData = async () => {
     const campusId = currentCampus?.id;
@@ -50,6 +66,50 @@ export const InventoryManagement: React.FC = () => {
   useEffect(() => {
     loadData();
   }, [currentCampus?.id]);
+
+  const handleCreateRequisition = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const errors: Record<string, string> = {};
+    const nameErr = validateName(newReq.itemName, 'Item description', 3).error;
+    if (nameErr) errors.itemName = nameErr;
+    if (newReq.quantity < 1) errors.quantity = 'Quantity must be at least 1 unit.';
+    const costErr = validateAmount(newReq.estimatedUnitCost, 100, 10000000, 'Estimated unit cost').error;
+    if (costErr) errors.estimatedUnitCost = costErr;
+    if (!newReq.justification || newReq.justification.trim().length < 8) {
+      errors.justification = 'Please provide a clear justification (minimum 8 characters).';
+    }
+
+    setReqErrors(errors);
+    if (Object.keys(errors).length > 0) return;
+
+    await api.createPurchaseRequisition({
+      requestedBy: currentUser.fullName,
+      departmentId: 'dept-cs',
+      campusId: currentCampus?.id || 'camp-main',
+      urgency: newReq.urgency,
+      items: [
+        {
+          name: newReq.itemName,
+          quantity: Number(newReq.quantity),
+          estimatedCost: Number(newReq.estimatedUnitCost) * Number(newReq.quantity),
+        },
+      ],
+      totalEstimatedCost: Number(newReq.estimatedUnitCost) * Number(newReq.quantity),
+      justification: newReq.justification,
+    });
+
+    setIsCreateReqOpen(false);
+    setReqErrors({});
+    setNewReq({
+      itemName: '',
+      category: 'IT Hardware',
+      quantity: 5,
+      estimatedUnitCost: 25000,
+      urgency: 'Normal',
+      justification: '',
+    });
+    await loadData();
+  };
 
   const itemColumns: Column<InventoryItem>[] = [
     {
@@ -278,7 +338,185 @@ export const InventoryManagement: React.FC = () => {
           title="Procurement & Purchase Requisitions"
           subtitle="Departmental requisition approvals, justification reviews, and purchase order issue"
           filename="purchase_requisitions"
+          actions={
+            canSubmitReq ? (
+              <button
+                onClick={() => {
+                  setIsCreateReqOpen(true);
+                  setReqErrors({});
+                }}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-white bg-[#DD2A2A] hover:bg-[#b91c1c] rounded-lg shadow-xs transition-colors shrink-0"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>New Requisition</span>
+              </button>
+            ) : undefined
+          }
         />
+      )}
+
+      {/* Create Purchase Requisition Modal */}
+      {isCreateReqOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-2xs">
+          <div className="bg-white rounded-xl shadow-xl border border-slate-200 max-w-lg w-full overflow-hidden animate-in fade-in zoom-in-95">
+            <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
+              <h3 className="text-sm font-bold text-slate-900">Initiate Purchase Requisition</h3>
+              <button
+                onClick={() => {
+                  setIsCreateReqOpen(false);
+                  setReqErrors({});
+                }}
+                className="p-1 rounded text-slate-400 hover:text-slate-600"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateRequisition} className="p-5 space-y-3.5 text-xs">
+              {Object.keys(reqErrors).length > 0 && (
+                <div className="p-2.5 bg-rose-50 border border-rose-200 rounded-lg text-rose-700 text-xs flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
+                  <span>Please resolve all field errors highlighted below.</span>
+                </div>
+              )}
+
+              <div>
+                <label className="block font-bold text-slate-700 uppercase tracking-wider mb-1">
+                  Item Description & Specification *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={newReq.itemName}
+                  onChange={(e) => setNewReq({ ...newReq, itemName: e.target.value })}
+                  placeholder="e.g. Core i7 Desktop Workstations with 32GB RAM"
+                  className={`w-full p-2 bg-slate-50 border rounded-lg text-slate-800 focus:outline-none transition-colors ${
+                    reqErrors.itemName ? 'border-rose-400 bg-rose-50/20' : 'border-slate-200 focus:ring-1 focus:ring-[#DD2A2A]'
+                  }`}
+                />
+                {reqErrors.itemName && (
+                  <p className="text-[11px] text-rose-600 mt-1 font-medium">{reqErrors.itemName}</p>
+                )}
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-slate-700 uppercase tracking-wider mb-1">
+                    Store Category
+                  </label>
+                  <select
+                    value={newReq.category}
+                    onChange={(e) => setNewReq({ ...newReq, category: e.target.value })}
+                    className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:ring-1 focus:ring-[#DD2A2A]"
+                  >
+                    <option value="IT Hardware">IT Hardware & Networking</option>
+                    <option value="Lab Equipment">Lab Equipment & Instruments</option>
+                    <option value="Stationery">Stationery & Office Supplies</option>
+                    <option value="Furniture">Campus Furniture & Fixtures</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 uppercase tracking-wider mb-1">
+                    Urgency Priority
+                  </label>
+                  <select
+                    value={newReq.urgency}
+                    onChange={(e) => setNewReq({ ...newReq, urgency: e.target.value as any })}
+                    className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:ring-1 focus:ring-[#DD2A2A]"
+                  >
+                    <option value="Normal">Normal Institutional Review</option>
+                    <option value="High">High (Semester Commencement)</option>
+                    <option value="Emergency">Emergency (Immediate)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-slate-700 uppercase tracking-wider mb-1">
+                    Quantity Required *
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    required
+                    value={newReq.quantity}
+                    onChange={(e) => setNewReq({ ...newReq, quantity: Number(e.target.value) })}
+                    className={`w-full p-2 bg-slate-50 border rounded-lg text-slate-800 font-mono focus:outline-none transition-colors ${
+                      reqErrors.quantity ? 'border-rose-400 bg-rose-50/20' : 'border-slate-200 focus:ring-1 focus:ring-[#DD2A2A]'
+                    }`}
+                  />
+                  {reqErrors.quantity && (
+                    <p className="text-[11px] text-rose-600 mt-1 font-medium">{reqErrors.quantity}</p>
+                  )}
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 uppercase tracking-wider mb-1">
+                    Est. Unit Cost (PKR) *
+                  </label>
+                  <input
+                    type="number"
+                    min="100"
+                    required
+                    value={newReq.estimatedUnitCost}
+                    onChange={(e) => setNewReq({ ...newReq, estimatedUnitCost: Number(e.target.value) })}
+                    className={`w-full p-2 bg-slate-50 border rounded-lg text-slate-800 font-mono focus:outline-none transition-colors ${
+                      reqErrors.estimatedUnitCost ? 'border-rose-400 bg-rose-50/20' : 'border-slate-200 focus:ring-1 focus:ring-[#DD2A2A]'
+                    }`}
+                  />
+                  {reqErrors.estimatedUnitCost && (
+                    <p className="text-[11px] text-rose-600 mt-1 font-medium">{reqErrors.estimatedUnitCost}</p>
+                  )}
+                </div>
+              </div>
+
+              <div className="p-2.5 bg-slate-50 rounded-lg border border-slate-200 flex items-center justify-between font-bold text-slate-800">
+                <span>Total Estimated Sanction:</span>
+                <span className="font-mono text-base text-[#DD2A2A] tabular-nums">
+                  PKR {(Number(newReq.quantity) * Number(newReq.estimatedUnitCost)).toLocaleString()}
+                </span>
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 uppercase tracking-wider mb-1">
+                  Departmental Justification & Academic Purpose *
+                </label>
+                <textarea
+                  rows={3}
+                  required
+                  value={newReq.justification}
+                  onChange={(e) => setNewReq({ ...newReq, justification: e.target.value })}
+                  placeholder="Explain why this procurement is necessary and which laboratories/programs it benefits..."
+                  className={`w-full p-2 bg-slate-50 border rounded-lg text-slate-800 focus:outline-none transition-colors ${
+                    reqErrors.justification ? 'border-rose-400 bg-rose-50/20' : 'border-slate-200 focus:ring-1 focus:ring-[#DD2A2A]'
+                  }`}
+                />
+                {reqErrors.justification && (
+                  <p className="text-[11px] text-rose-600 mt-1 font-medium">{reqErrors.justification}</p>
+                )}
+              </div>
+
+              <div className="pt-3 border-t border-slate-200 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsCreateReqOpen(false);
+                    setReqErrors({});
+                  }}
+                  className="px-3 py-1.5 font-semibold text-slate-600 hover:bg-slate-100 rounded-lg"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-1.5 font-bold text-white bg-[#DD2A2A] hover:bg-[#b91c1c] rounded-lg shadow-xs"
+                >
+                  Submit to Workflow
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
 
       {/* Approval Modal */}

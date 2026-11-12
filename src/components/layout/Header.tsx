@@ -27,6 +27,7 @@ import { UserRoleName } from '../../types';
 import { db } from '../../services/db';
 import { GlobalSearch } from '../common/GlobalSearch';
 import { UserProfileModal } from '../common/UserProfileModal';
+import { PrintPreviewModal } from '../common/PrintPreviewModal';
 import { exportCurrentViewToPdf } from '../../utils/pdfExport';
 
 interface HeaderProps {
@@ -49,8 +50,10 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, onNavigateTab }) => {
   const [isCampusMenuOpen, setIsCampusMenuOpen] = useState(false);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [isPrintPreviewOpen, setIsPrintPreviewOpen] = useState(false);
   const [isExportingPdf, setIsExportingPdf] = useState(false);
   const [pdfExportStatus, setPdfExportStatus] = useState<string | null>(null);
+
 
   const handleExportCurrentView = async () => {
     setIsExportingPdf(true);
@@ -218,22 +221,17 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, onNavigateTab }) => {
           )}
         </div>
 
-        {/* Export Current View as PDF Button (html2pdf.js) */}
+        {/* Export Current View as PDF & Print Preview Button */}
         <button
-          onClick={handleExportCurrentView}
+          onClick={() => setIsPrintPreviewOpen(true)}
           disabled={isExportingPdf}
-          title="Export Current View as PDF using html2pdf.js (honors print media formatting)"
+          title="Open Print Preview & Export as PDF (Toggle sections & A4 layout)"
           className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:text-[#DD2A2A] hover:bg-red-50/70 border border-slate-200 rounded-lg transition-colors cursor-pointer disabled:opacity-50 shrink-0"
         >
-          {isExportingPdf ? (
-            <Loader2 className="w-3.5 h-3.5 text-[#DD2A2A] animate-spin" />
-          ) : (
-            <FileDown className="w-3.5 h-3.5 text-[#DD2A2A]" />
-          )}
-          <span className="hidden sm:inline">
-            {isExportingPdf ? 'Exporting...' : pdfExportStatus || 'Export PDF'}
-          </span>
+          <FileDown className="w-3.5 h-3.5 text-[#DD2A2A]" />
+          <span className="hidden sm:inline">Export PDF</span>
         </button>
+
 
         {/* Reset Database Button */}
         <button
@@ -319,7 +317,7 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, onNavigateTab }) => {
                 <button
                   onClick={() => {
                     setIsProfileMenuOpen(false);
-                    handleExportCurrentView();
+                    setIsPrintPreviewOpen(true);
                   }}
                   className="w-full text-left px-3.5 py-2 flex items-center gap-2 text-slate-700 hover:bg-slate-50 transition-colors"
                 >
@@ -351,6 +349,17 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, onNavigateTab }) => {
         isOpen={isProfileModalOpen}
         onClose={() => setIsProfileModalOpen(false)}
         onLogout={logout}
+      />
+
+      {/* Print Preview & PDF Export Modal */}
+      <PrintPreviewModal
+        isOpen={isPrintPreviewOpen}
+        onClose={() => setIsPrintPreviewOpen(false)}
+        activeTab={activeTab}
+        moduleTitle={getBreadcrumb()}
+        campusName={currentCampus?.name}
+        userName={currentUser.fullName}
+        userRole={currentUser.primaryRole}
       />
     </header>
   );

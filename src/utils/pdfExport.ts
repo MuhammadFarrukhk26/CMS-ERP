@@ -8,8 +8,18 @@
 
 import html2pdf from 'html2pdf.js';
 
+export interface SectionToggles {
+  showHeader?: boolean;
+  showMetrics?: boolean;
+  showCharts?: boolean;
+  showTable?: boolean;
+  showApprovals?: boolean;
+  showSignatures?: boolean;
+}
+
 export interface PdfExportOptions {
   filename?: string;
+  moduleKey?: string;
   title?: string;
   landscape?: boolean;
   campusName?: string;
@@ -18,7 +28,40 @@ export interface PdfExportOptions {
   format?: 'a4' | 'letter';
   margin?: number | [number, number, number, number];
   scale?: number;
+  sectionToggles?: SectionToggles;
 }
+
+/**
+ * Generates dynamic filenames formatted based on the active module and current date,
+ * e.g., 'HRMS_Report_2026-11-10.pdf' or 'Finance_Report_2026-11-10.pdf'.
+ */
+export const getDynamicPdfFilename = (moduleKeyOrName?: string, dateOverride?: string): string => {
+  const dateStr = dateOverride || new Date().toISOString().split('T')[0];
+  if (!moduleKeyOrName) return `Campus_ERP_Report_${dateStr}.pdf`;
+
+  const keyMap: Record<string, string> = {
+    dashboard: 'Dashboard',
+    hrms: 'HRMS',
+    tms: 'TMS',
+    academics: 'Academics',
+    admissions: 'Admissions',
+    finance: 'Finance',
+    payroll: 'Payroll',
+    inventory: 'Inventory',
+    approvals: 'Approvals',
+    rbac: 'RBAC',
+    audit: 'Audit',
+  };
+
+  const normalized = moduleKeyOrName.toLowerCase().trim();
+  const moduleLabel = keyMap[normalized] || moduleKeyOrName
+    .replace(/^([a-z])/, (m) => m.toUpperCase())
+    .replace(/\s+/g, '_')
+    .replace(/[^a-zA-Z0-9_-]/g, '');
+
+  const cleanBase = moduleLabel.replace(/\.pdf$/i, '').replace(/_report$/i, '');
+  return `${cleanBase}_Report_${dateStr}.pdf`;
+};
 
 /**
  * Helper to reliably resolve html2pdf callable across ESM/bundler module formats
@@ -38,7 +81,7 @@ const getHtml2PdfWorker = () => {
  * Creates an isolated sandbox clone that strictly enforces the same
  * CSS print media rules used by the university print layout.
  */
-const preparePrintSandbox = (
+export const preparePrintSandbox = (
   sourceElement: HTMLElement,
   options: PdfExportOptions = {}
 ): { sandbox: HTMLElement; cleanup: () => void } => {
@@ -135,12 +178,20 @@ const preparePrintSandbox = (
   `;
   sandbox.appendChild(styleTag);
 
-  // If exporting the full view (not a single pre-formatted document like challan/transcript),
-  // prepend an institutional university report header
+  const toggles = options.sectionToggles || {
+    showHeader: true,
+    showMetrics: true,
+    showCharts: true,
+    showTable: true,
+    showApprovals: true,
+    showSignatures: true,
+  };
+
+  // If exporting the full view, prepend an institutional university report header
   const isDedicatedDocument = sourceElement.classList.contains('printable-document-root') ||
     sourceElement.querySelector('.printable-document-root') !== null;
 
-  if (!isDedicatedDocument && (options.moduleName || options.title)) {
+  if (toggles.showHeader !== false && !isDedicatedDocument && (options.moduleName || options.title)) {
     const reportHeader = document.createElement('div');
     reportHeader.style.borderBottom = '2px solid #DD2A2A';
     reportHeader.style.paddingBottom = '14px';
@@ -183,21 +234,76 @@ const preparePrintSandbox = (
     'button:not(.pdf-preserve), .print-hide, .no-print, input[type="text"], input[type="search"], select, .pagination-controls'
   );
   elementsToPrune.forEach((el) => {
-    // If it's a table action column header/cells, remove cleanly
-    const parentCell = el.closest('th, td');
-    if (parentCell && (parentCell.textContent?.trim() === '' || el.tagName.toLowerCase() === 'button')) {
-      // Keep structural integrity if needed or blank it out
-      el.remove();
-    } else {
-      el.remove();
-    }
+    el.remove();
   });
+
+  // Apply Section Toggles
+  if (toggles.showMetrics === false) {
+    const metricsGrid = clone.querySelectorAll('.metric-card, .grid.grid-cols-1.sm\\:grid-cols-2.lg\\:grid-cols-4');
+    metricsGrid.forEach((m) => m.remove());
+  }
+
+  if (toggles.showCharts === false) {
+    const chartsContainers = clone.querySelectorAll('.recharts-responsive-container, [data-pdf-section="chart"], .chart-card');
+    chartsContainers.forEach((c) => {
+      const card = c.closest('.bg-white.rounded-xl, .bg-white.p-5, .bg-white.p-4');
+      if (card) card.remove();
+      else c.remove();
+    });
+  }
+
+  if (toggles.showTable === false) {
+    const tables = clone.querySelectorAll('table, .overflow-x-auto, [data-pdf-section="table"]');
+    tables.forEach((t) => {
+      const parent = t.closest('.bg-white.rounded-xl.border');
+      if (parent) parent.remove();
+      else t.remove();
+    });
+  }
+
+  if (toggles.showApprovals === false) {
+    const approvals = clone.querySelectorAll('[data-pdf-section="approvals"], .approval-queue-section');
+    approvals.forEach((a) => a.remove());
+  }
 
   // If the cloned element was a table with search bar at top, strip search bar
   const searchBars = clone.querySelectorAll('.relative.min-w-\\[240px\\], [placeholder*="Search"]');
   searchBars.forEach((sb) => sb.remove());
 
   sandbox.appendChild(clone);
+
+  // Signatures block
+  if (toggles.showSignatures && !isDedicatedDocument) {
+    const sigBlock = document.createElement('div');
+    sigBlock.style.marginTop = '36px';
+    sigBlock.style.paddingTop = '16px';
+    sigBlock.style.borderTop = '1px solid #cbd5e1';
+    sigBlock.style.display = 'grid';
+    sigBlock.style.gridTemplateColumns = 'repeat(3, 1fr)';
+    sigBlock.style.gap = '20px';
+    sigBlock.style.textAlign = 'center';
+    sigBlock.style.fontSize = '10px';
+    sigBlock.style.color = '#64748b';
+    sigBlock.innerHTML = `
+      <div>
+        <div style="border-bottom: 1px solid #94a3b8; height: 32px; margin-bottom: 4px;"></div>
+        <strong style="color: #1e293b;">Verified By</strong>
+        <div>Department Head / Dean</div>
+      </div>
+      <div>
+        <div style="border-bottom: 1px solid #94a3b8; height: 32px; margin-bottom: 4px;"></div>
+        <strong style="color: #1e293b;">Internal Audit Clearance</strong>
+        <div>Finance & Audit Officer</div>
+      </div>
+      <div>
+        <div style="border-bottom: 1px solid #94a3b8; height: 32px; margin-bottom: 4px;"></div>
+        <strong style="color: #1e293b;">Executive Authorization</strong>
+        <div>Registrar / Vice Chancellor</div>
+      </div>
+    `;
+    sandbox.appendChild(sigBlock);
+  }
+
   document.body.appendChild(sandbox);
 
   return {
@@ -212,7 +318,7 @@ const preparePrintSandbox = (
 
 /**
  * Exports a specific DOM element (or element by ID) to PDF using html2pdf.js,
- * rigorously honoring the application's CSS print media rules.
+ * rigorously honoring the application's CSS print media rules and dynamic filenames.
  */
 export const exportElementToPdf = async (
   elementOrId: string | HTMLElement,
@@ -230,17 +336,12 @@ export const exportElementToPdf = async (
   const { sandbox, cleanup } = preparePrintSandbox(targetElement, options);
 
   try {
-    const rawFilename = options.filename || options.title || 'campus_erp_document';
-    const cleanFilename = rawFilename
-      .replace(/[^a-zA-Z0-9_-]/g, '_')
-      .replace(/_+/g, '_')
-      .toLowerCase();
-
+    const targetFilename = options.filename || getDynamicPdfFilename(options.moduleKey || options.moduleName || options.title);
     const worker = getHtml2PdfWorker();
 
     const pdfOptions = {
-      margin: options.margin ?? (options.landscape ? [10, 10, 10, 10] : [10, 12, 10, 12]),
-      filename: `${cleanFilename}_${new Date().toISOString().split('T')[0]}.pdf`,
+      margin: options.margin ?? (options.landscape ? [8, 8, 8, 8] : [10, 10, 10, 10]),
+      filename: targetFilename,
       image: { type: 'jpeg', quality: 0.98 },
       html2canvas: {
         scale: options.scale || 2, // High resolution retina rendering
@@ -282,15 +383,18 @@ export const exportElementToPdf = async (
 
 /**
  * Universal utility to export the CURRENT VIEW (active module screen or document)
- * to a standardized executive PDF report honoring CSS print rules.
+ * to a standardized executive PDF report honoring CSS print rules and dynamic filenames.
  */
 export const exportCurrentViewToPdf = async (options: PdfExportOptions = {}): Promise<boolean> => {
+  const targetFilename = options.filename || getDynamicPdfFilename(options.moduleKey || options.moduleName || options.title);
+
   // Priority 1: Check if an official document modal is currently open
   const docModalElement = document.getElementById('printable-university-document');
   if (docModalElement && docModalElement.offsetParent !== null) {
     return exportElementToPdf(docModalElement, {
       ...options,
       landscape: false,
+      filename: targetFilename,
       title: options.title || 'Official University Document',
     });
   }
@@ -302,7 +406,8 @@ export const exportCurrentViewToPdf = async (options: PdfExportOptions = {}): Pr
   if (activeViewElement) {
     return exportElementToPdf(activeViewElement, {
       ...options,
-      landscape: options.landscape ?? true, // Default to landscape for broad data dashboards
+      landscape: options.landscape ?? true,
+      filename: targetFilename,
       title: options.title || 'Campus ERP Executive View Report',
     });
   }
@@ -313,6 +418,7 @@ export const exportCurrentViewToPdf = async (options: PdfExportOptions = {}): Pr
     return exportElementToPdf(mainViewport, {
       ...options,
       landscape: true,
+      filename: targetFilename,
     });
   }
 

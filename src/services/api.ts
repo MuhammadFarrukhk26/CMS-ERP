@@ -875,6 +875,35 @@ class ApiService {
     return { success: true, data: item, message: `Payment of PKR ${amount.toLocaleString()} recorded successfully` };
   }
 
+  public async createFeeChallan(
+    challanData: Omit<FeeChallan, 'id' | 'challanNo' | 'status' | 'paidAmount'>
+  ): Promise<ApiResponse<FeeChallan>> {
+    const challans = db.getCollection('feeChallans');
+    const challanNo = `CH-2026-${String(8490 + challans.length)}`;
+    const newChallan: FeeChallan = {
+      ...challanData,
+      id: `ch-${Date.now()}`,
+      challanNo,
+      status: 'Unpaid',
+      paidAmount: 0,
+    };
+    challans.unshift(newChallan);
+    db.updateCollection('feeChallans', [...challans]);
+
+    db.addAuditLog({
+      userId: this.currentUser.id,
+      userName: this.currentUser.fullName,
+      userRole: this.currentUser.primaryRole,
+      module: 'finance',
+      action: 'create',
+      resource: `Challan: ${challanNo}`,
+      ipAddress: '127.0.0.1',
+      details: `Generated new student semester fee challan for ${newChallan.studentName} (PKR ${newChallan.totalAmount.toLocaleString()})`,
+    });
+
+    return { success: true, data: newChallan, message: 'Fee Challan issued successfully.' };
+  }
+
   public async getVouchers(campusId?: string): Promise<ApiResponse<JournalVoucher[]>> {
     let vouchers = db.getCollection('vouchers');
     if (campusId && campusId !== 'all') {
@@ -972,6 +1001,65 @@ class ApiService {
       reqs = reqs.filter((r) => r.campusId === campusId);
     }
     return { success: true, data: reqs, total: reqs.length };
+  }
+
+  public async createPurchaseRequisition(
+    reqData: Omit<PurchaseRequisition, 'id' | 'reqNo' | 'status' | 'requestDate' | 'approvalHistory'>
+  ): Promise<ApiResponse<PurchaseRequisition>> {
+    const reqs = db.getCollection('requisitions');
+    const approvals = db.getCollection('approvals');
+    const reqNo = `PR-2026-${String(980 + reqs.length)}`;
+    const reqId = `req-${Date.now()}`;
+    const today = new Date().toISOString().split('T')[0];
+
+    const newReq: PurchaseRequisition = {
+      ...reqData,
+      id: reqId,
+      reqNo,
+      status: 'Pending Approval',
+      requestDate: today,
+      approvalHistory: [
+        {
+          action: 'Submitted',
+          actorName: reqData.requestedBy,
+          actorRole: 'Departmental In-Charge',
+          timestamp: new Date().toLocaleString(),
+          remarks: 'Requisition submitted for institutional procurement review',
+        },
+      ],
+    };
+
+    reqs.unshift(newReq);
+    db.updateCollection('requisitions', [...reqs]);
+
+    const newApproval: ApprovalRequest = {
+      id: `appr-${Date.now()}`,
+      entityType: 'Requisition',
+      entityId: reqId,
+      referenceNo: reqNo,
+      title: `Purchase Requisition - PKR ${newReq.totalEstimatedCost.toLocaleString()}`,
+      submittedBy: newReq.requestedBy,
+      departmentName: 'Store & Procurement',
+      campusId: newReq.campusId,
+      status: 'Pending Approval',
+      submittedAt: today,
+      history: [...newReq.approvalHistory],
+    };
+    approvals.unshift(newApproval);
+    db.updateCollection('approvals', [...approvals]);
+
+    db.addAuditLog({
+      userId: this.currentUser.id,
+      userName: this.currentUser.fullName,
+      userRole: this.currentUser.primaryRole,
+      module: 'inventory',
+      action: 'create',
+      resource: `Requisition: ${reqNo}`,
+      ipAddress: '127.0.0.1',
+      details: `New purchase requisition submitted by ${newReq.requestedBy} for PKR ${newReq.totalEstimatedCost.toLocaleString()}`,
+    });
+
+    return { success: true, data: newReq, message: 'Purchase Requisition submitted to university approval workflow.' };
   }
 
   // ---------------- APPROVAL ENGINE ----------------
