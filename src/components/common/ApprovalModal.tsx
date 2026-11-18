@@ -3,9 +3,9 @@
  * Unified Approval Action & Workflow History Modal
  */
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { X, CheckCircle, XCircle, RotateCcw, Clock, UserCheck, ShieldAlert } from 'lucide-react';
-import { ApprovalRequest } from '../../types';
+import { ApprovalRequest, ERPModule } from '../../types';
 import { StatusBadge } from './StatusBadge';
 import { useAuth } from '../../context/AuthContext';
 
@@ -34,12 +34,26 @@ export const ApprovalModal: React.FC<ApprovalModalProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  useEffect(() => {
+    if (isOpen) {
+      setRemarks('');
+      setSelectedAction('Approved');
+      setError(null);
+    }
+  }, [isOpen, request?.id]);
+
   if (!isOpen || !request) return null;
 
-  const canApprove = hasPermission(
-    request.entityType === 'Leave' ? 'hrms' : request.entityType === 'Voucher' ? 'finance' : 'inventory',
-    'approve'
-  );
+  const moduleByEntity: Record<ApprovalRequest['entityType'], ERPModule> = {
+    Leave: 'hrms',
+    Marks: 'academics',
+    Requisition: 'inventory',
+    MeritList: 'admissions',
+    Payroll: 'payroll',
+    Voucher: 'finance',
+  };
+  const canApprove = hasPermission(moduleByEntity[request.entityType], 'approve');
+  const isPending = request.status === 'Pending Approval';
 
   const handleSubmit = async () => {
     if (selectedAction === 'Rejected' && !remarks.trim()) {
@@ -61,7 +75,7 @@ export const ApprovalModal: React.FC<ApprovalModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs">
-      <div className="bg-white rounded-xl shadow-xl border border-slate-200 max-w-xl w-full overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+      <div className="bg-white rounded-xl shadow-xl border border-slate-200 max-w-xl w-full max-h-[92vh] overflow-y-auto animate-in fade-in zoom-in-95 duration-150">
         {/* Header */}
         <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
           <div>
@@ -138,13 +152,13 @@ export const ApprovalModal: React.FC<ApprovalModalProps> = ({
             <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800 flex items-center gap-2">
               <ShieldAlert className="w-4 h-4 text-amber-600 shrink-0" />
               <span>
-                Your current role (<strong>{currentUser.primaryRole}</strong>) is not granted approval authorization for this module. Switch persona to <strong>Super Admin</strong>, <strong>Faculty Dean</strong>, or <strong>HR/Finance Manager</strong> in the top bar to approve or reject.
+                Your current role (<strong>{currentUser.primaryRole}</strong>) cannot approve this {request.entityType.toLowerCase()} request. Switch to a persona with approval permission for the corresponding module.
               </span>
             </div>
-          ) : request.status === 'Approved' ? (
-            <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-xs text-emerald-800 flex items-center gap-2">
-              <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
-              <span>This request has already been finalized and approved.</span>
+          ) : !isPending ? (
+            <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-700 flex items-center gap-2">
+              <CheckCircle className="w-4 h-4 text-slate-500 shrink-0" />
+              <span>This request is {request.status.toLowerCase()} and can no longer be actioned.</span>
             </div>
           ) : (
             /* Action Controls */
@@ -223,7 +237,7 @@ export const ApprovalModal: React.FC<ApprovalModalProps> = ({
           >
             Close
           </button>
-          {canApprove && request.status !== 'Approved' && (
+          {canApprove && isPending && (
             <button
               onClick={handleSubmit}
               disabled={isSubmitting}

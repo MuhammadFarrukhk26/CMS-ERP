@@ -174,8 +174,19 @@ export const FinanceManagement: React.FC = () => {
     setChallanErrors(errors);
     if (Object.keys(errors).length > 0) return;
 
+    const studentsRes = await api.getStudents(currentCampus?.id);
+    const student = studentsRes.data.find(
+      (candidate) => candidate.rollNo.toLowerCase() === newChallan.rollNo.trim().toLowerCase()
+    );
+    if (!student) {
+      setChallanErrors({ rollNo: 'No student found with this roll number.' });
+      return;
+    }
+
     await api.createFeeChallan({
       ...newChallan,
+      studentId: student.id,
+      issueDate: new Date().toISOString().split('T')[0],
       totalAmount: totalCalculated,
       campusId: currentCampus?.id || 'camp-main',
     });
@@ -263,10 +274,11 @@ export const FinanceManagement: React.FC = () => {
             <button
               onClick={() => {
                 setSelectedChallan(c);
-                setPaymentData({
+                setPaymentData((prev) => ({
+                  ...prev,
                   amount: c.totalAmount - c.paidAmount,
                   bankBranch: 'HBL University Branch, Islamabad',
-                });
+                }));
                 setIsPaymentOpen(true);
               }}
               className="px-2.5 py-1 text-xs font-bold text-emerald-700 hover:bg-emerald-50 rounded transition-colors"
@@ -683,7 +695,7 @@ export const FinanceManagement: React.FC = () => {
       {/* Record Fee Payment Modal */}
       {isPaymentOpen && selectedChallan && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-2xs">
-          <div className="bg-white rounded-xl shadow-xl border border-slate-200 max-w-md w-full overflow-hidden animate-in fade-in zoom-in-95">
+          <div className="bg-white rounded-xl shadow-xl border border-slate-200 max-w-md w-full max-h-[92vh] overflow-y-auto animate-in fade-in zoom-in-95">
             <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
               <h3 className="text-sm font-bold text-slate-900">Record Fee Challan Collection</h3>
               <button
@@ -795,7 +807,7 @@ export const FinanceManagement: React.FC = () => {
       {/* Issue Fee Challan Modal */}
       {isIssueChallanOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-2xs">
-          <div className="bg-white rounded-xl shadow-xl border border-slate-200 max-w-lg w-full overflow-hidden animate-in fade-in zoom-in-95">
+          <div className="bg-white rounded-xl shadow-xl border border-slate-200 max-w-lg w-full max-h-[92vh] overflow-y-auto animate-in fade-in zoom-in-95">
             <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
               <h3 className="text-sm font-bold text-slate-900">Issue Student Semester Fee Challan</h3>
               <button

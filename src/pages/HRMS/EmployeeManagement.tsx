@@ -475,7 +475,7 @@ export const EmployeeManagement: React.FC = () => {
       {/* Register Employee Modal */}
       {isAddEmployeeOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-2xs">
-          <div className="bg-white rounded-xl shadow-xl border border-slate-200 max-w-2xl w-full overflow-hidden animate-in fade-in zoom-in-95">
+          <div className="bg-white rounded-xl shadow-xl border border-slate-200 max-w-2xl w-full max-h-[92vh] overflow-y-auto animate-in fade-in zoom-in-95">
             <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
               <h3 className="text-sm font-bold text-slate-900">Register University Employee</h3>
               <button
@@ -766,7 +766,7 @@ export const EmployeeManagement: React.FC = () => {
       {/* Apply Leave Modal */}
       {isApplyLeaveOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-2xs">
-          <div className="bg-white rounded-xl shadow-xl border border-slate-200 max-w-md w-full overflow-hidden animate-in fade-in zoom-in-95">
+          <div className="bg-white rounded-xl shadow-xl border border-slate-200 max-w-md w-full max-h-[92vh] overflow-y-auto animate-in fade-in zoom-in-95">
             <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
               <h3 className="text-sm font-bold text-slate-900">Submit Leave Application</h3>
               <button

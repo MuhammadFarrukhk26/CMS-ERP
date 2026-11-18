@@ -8,13 +8,8 @@ import {
   Clock,
   LogIn,
   LogOut,
-  Calendar,
   CheckCircle,
   AlertCircle,
-  Cpu,
-  RefreshCw,
-  Plus,
-  Sliders,
   CheckCheck,
 } from 'lucide-react';
 import { ERPTable, Column } from '../../components/common/ERPTable';
@@ -23,22 +18,37 @@ import { api } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import { AttendanceRecord, Shift, Employee } from '../../types';
 
-export const AttendanceManagement: React.FC = () => {
+interface AttendanceManagementProps {
+  onNavigateTab: (tab: string) => void;
+}
+
+const getLocalDate = () => {
+  const date = new Date();
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+};
+
+export const AttendanceManagement: React.FC<AttendanceManagementProps> = ({ onNavigateTab }) => {
   const { currentCampus, currentUser, hasPermission } = useAuth();
   const [activeTab, setActiveTab] = useState<'attendance' | 'shifts' | 'biometric'>('attendance');
   const [attendance, setAttendance] = useState<AttendanceRecord[]>([]);
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
-  const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [selectedDate, setSelectedDate] = useState(getLocalDate);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [punchFeedback, setPunchFeedback] = useState<string | null>(null);
+  const [punchFeedback, setPunchFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
-  const canCommitMonth = hasPermission('tms', 'approve') || currentUser.primaryRole === 'Super Admin';
+  const canOpenPayroll =
+    (hasPermission('tms', 'approve') || currentUser.primaryRole === 'Super Admin') &&
+    hasPermission('payroll', 'view');
+  const punchEmployee =
+    employees.find((employee) => employee.id === currentUser.employeeId) ||
+    employees.find((employee) => employee.fullName.toLowerCase() === currentUser.fullName.toLowerCase()) ||
+    employees[0];
 
   const loadData = async () => {
     const campusId = currentCampus?.id;
     const [attRes, shiftRes, empRes] = await Promise.all([
-      api.getAttendance(campusId),
+      api.getAttendance(campusId, selectedDate),
       api.getShifts(),
       api.getEmployees(campusId),
     ]);
@@ -50,21 +60,31 @@ export const AttendanceManagement: React.FC = () => {
 
   useEffect(() => {
     loadData();
-  }, [currentCampus?.id]);
+  }, [currentCampus?.id, selectedDate]);
 
   const handlePunch = async (type: 'checkIn' | 'checkOut') => {
+    if (!punchEmployee) {
+      setPunchFeedback({ type: 'error', message: 'No employee record is available for this attendance punch.' });
+      return;
+    }
     setIsProcessing(true);
     setPunchFeedback(null);
     try {
-      // Find employee associated with current user or fallback
-      const empId = currentUser.employeeId || employees[0]?.id || 'emp-001';
-      const res = await api.recordWebPunch(empId, type);
+      const res = await api.recordWebPunch(punchEmployee.id, type);
       if (res.success) {
-        setPunchFeedback(res.message || `${type === 'checkIn' ? 'Check-in' : 'Check-out'} recorded`);
+        setPunchFeedback({
+          type: 'success',
+          message: res.message || `${type === 'checkIn' ? 'Check-in' : 'Check-out'} recorded`,
+        });
         await loadData();
+      } else {
+        setPunchFeedback({ type: 'error', message: res.message || 'Failed to record attendance.' });
       }
-    } catch (err: any) {
-      setPunchFeedback(err.message || 'Failed to record attendance');
+    } catch (err) {
+      setPunchFeedback({
+        type: 'error',
+        message: err instanceof Error ? err.message : 'Failed to record attendance.',
+      });
     } finally {
       setIsProcessing(false);
     }
@@ -197,16 +217,16 @@ export const AttendanceManagement: React.FC = () => {
             Daily Employee Attendance & Shift Scheduler
           </h2>
           <p className="text-xs text-slate-500 mt-1">
-            Real-time biometric attendance sync, automatic grace calculations, and monthly commit pipelines.
+            Staff web punches and attendance logs for the selected campus and date.
           </p>
         </div>
 
-        {/* Live Web Punch simulator */}
+        {/* Web punch terminal */}
         <div className="flex items-center gap-2 p-2 bg-slate-50 rounded-xl border border-slate-200">
           <div className="text-right pr-2 border-r border-slate-200">
             <span className="text-[10px] text-slate-400 font-bold uppercase block">Current Staff</span>
             <span className="text-xs font-bold text-slate-800 block truncate max-w-[130px]">
-              {currentUser.fullName}
+              {punchEmployee?.fullName || 'No employee record'}
             </span>
           </div>
 
@@ -233,20 +253,26 @@ export const AttendanceManagement: React.FC = () => {
       </div>
 
       {punchFeedback && (
-        <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-xs font-semibold text-emerald-800 flex items-center justify-between">
+        <div className={`p-3 border rounded-lg text-xs font-semibold flex items-center justify-between ${
+          punchFeedback.type === 'success'
+            ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+            : 'bg-rose-50 border-rose-200 text-rose-800'
+        }`}>
           <div className="flex items-center gap-2">
-            <CheckCircle className="w-4 h-4 text-emerald-600" />
-            <span>{punchFeedback}</span>
+            {punchFeedback.type === 'success'
+              ? <CheckCircle className="w-4 h-4 text-emerald-600" />
+              : <AlertCircle className="w-4 h-4 text-rose-600" />}
+            <span>{punchFeedback.message}</span>
           </div>
-          <button onClick={() => setPunchFeedback(null)} className="text-emerald-700 font-bold">
+          <button onClick={() => setPunchFeedback(null)} aria-label="Dismiss attendance message" className="font-bold">
             ×
           </button>
         </div>
       )}
 
       {/* Tabs */}
-      <div className="flex items-center justify-between gap-4">
-        <div className="flex items-center gap-1 p-1 bg-white border border-slate-200 rounded-lg text-xs shadow-2xs">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+        <div className="flex items-center gap-1 p-1 bg-white border border-slate-200 rounded-lg text-xs shadow-2xs overflow-x-auto max-w-full">
           <button
             onClick={() => setActiveTab('attendance')}
             className={`px-3 py-1.5 font-bold rounded-md transition-colors ${
@@ -279,29 +305,38 @@ export const AttendanceManagement: React.FC = () => {
           </button>
         </div>
 
-        {canCommitMonth && (
+        {canOpenPayroll && (
           <button
-            onClick={() => {
-              alert('Month-end attendance commit executed! All approved overtime and hours are synchronized with Payroll.');
-            }}
+            onClick={() => onNavigateTab('payroll')}
             className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg transition-colors shadow-2xs"
           >
             <CheckCheck className="w-3.5 h-3.5 text-emerald-600" />
-            <span>Commit Month to Payroll</span>
+            <span>Review Payroll</span>
           </button>
         )}
       </div>
 
       {activeTab === 'attendance' && (
-        <ERPTable
-          data={attendance}
-          columns={attendanceColumns}
-          searchPlaceholder="Search attendance by employee name..."
-          searchKeys={['employeeName', 'source', 'status']}
-          title="Daily Employee Attendance Registry"
-          subtitle="Biometric punches, check-in timestamps, grace lateness, and net work hours"
-          filename="attendance_records"
-        />
+        <>
+          <label className="flex flex-wrap items-center gap-2 text-xs font-semibold text-slate-600">
+            Attendance date
+            <input
+              type="date"
+              value={selectedDate}
+              onChange={(event) => setSelectedDate(event.target.value)}
+              className="px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:ring-1 focus:ring-[#DD2A2A]"
+            />
+          </label>
+          <ERPTable
+            data={attendance}
+            columns={attendanceColumns}
+            searchPlaceholder="Search attendance by employee name..."
+            searchKeys={['employeeName', 'source', 'status']}
+            title="Daily Employee Attendance Registry"
+            subtitle={`Web punches and attendance records for ${selectedDate}`}
+            filename="attendance_records"
+          />
+        </>
       )}
 
       {activeTab === 'shifts' && (
@@ -324,12 +359,12 @@ export const AttendanceManagement: React.FC = () => {
                 Biometric Attendance Device Network & Gateway
               </h3>
               <p className="text-xs text-slate-500">
-                Direct TCP/IP and HTTP API listeners for ZKTeco and Hikvision facial recognition terminals
+                Sample terminal inventory only. A live biometric gateway is not connected in this demo.
               </p>
             </div>
-            <span className="flex items-center gap-1.5 text-xs font-bold text-emerald-700">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              <span>Gateway Daemon Active</span>
+              <span className="flex items-center gap-1.5 text-xs font-bold text-slate-500">
+                <span className="w-2 h-2 rounded-full bg-slate-400" />
+                <span>Demo data · Not connected</span>
             </span>
           </div>
 
@@ -337,7 +372,7 @@ export const AttendanceManagement: React.FC = () => {
             <div className="p-4 bg-slate-50 rounded-lg border border-slate-200 space-y-1">
               <div className="flex justify-between items-center">
                 <span className="font-bold text-slate-900">Terminal 01 - Main Academic Gate</span>
-                <StatusBadge status="Active" />
+                <StatusBadge status="Demo" />
               </div>
               <p className="font-mono text-slate-500">IP: 192.168.10.201 · Port 4370</p>
               <p className="text-[11px] text-slate-400">Model: ZKTeco SilkBio-101TC</p>
@@ -350,7 +385,7 @@ export const AttendanceManagement: React.FC = () => {
             <div className="p-4 bg-slate-50 rounded-lg border border-slate-200 space-y-1">
               <div className="flex justify-between items-center">
                 <span className="font-bold text-slate-900">Terminal 02 - Admin & Faculty Block</span>
-                <StatusBadge status="Active" />
+                <StatusBadge status="Demo" />
               </div>
               <p className="font-mono text-slate-500">IP: 192.168.10.202 · Port 4370</p>
               <p className="text-[11px] text-slate-400">Model: ZKTeco ProCapture-A</p>
@@ -363,7 +398,7 @@ export const AttendanceManagement: React.FC = () => {
             <div className="p-4 bg-slate-50 rounded-lg border border-slate-200 space-y-1">
               <div className="flex justify-between items-center">
                 <span className="font-bold text-slate-900">Terminal 03 - Library & Computing</span>
-                <StatusBadge status="Active" />
+                <StatusBadge status="Demo" />
               </div>
               <p className="font-mono text-slate-500">IP: 192.168.10.203 · Port 4370</p>
               <p className="text-[11px] text-slate-400">Model: Hikvision DS-K1T671</p>

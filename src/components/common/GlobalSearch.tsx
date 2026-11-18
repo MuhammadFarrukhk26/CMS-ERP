@@ -481,11 +481,12 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({ onNavigateTab }) => 
       <button
         type="button"
         onClick={() => setIsOpen(true)}
-        className="flex items-center justify-between gap-3 px-3 py-1.5 text-xs text-slate-500 bg-slate-50 hover:bg-slate-100 hover:text-slate-800 border border-slate-200 rounded-lg transition-all w-48 sm:w-64 md:w-80 shadow-2xs group"
+        aria-label="Open global search"
+        className="flex items-center justify-center sm:justify-between gap-3 px-2 sm:px-3 py-1.5 text-xs text-slate-500 bg-slate-50 hover:bg-slate-100 hover:text-slate-800 border border-slate-200 rounded-lg transition-all w-10 sm:w-64 md:w-80 shadow-2xs group"
       >
         <div className="flex items-center gap-2 truncate">
           <Search className="w-3.5 h-3.5 text-slate-400 group-hover:text-[#DD2A2A] transition-colors shrink-0" />
-          <span className="truncate">Search students, staff, ledger...</span>
+          <span className="hidden sm:block truncate">Search students, staff, ledger...</span>
         </div>
         <kbd className="hidden sm:inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-mono text-slate-400 bg-white border border-slate-200 rounded shrink-0 shadow-2xs">
           ⌘K

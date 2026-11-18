@@ -164,7 +164,7 @@ export function ERPTable<T extends { id?: string | number }>({
 
         <div className="flex flex-wrap items-center gap-2.5">
           {/* Search Input */}
-          <div className="relative min-w-[240px]">
+          <div className="relative min-w-full sm:min-w-[240px] sm:flex-1">
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
               type="text"

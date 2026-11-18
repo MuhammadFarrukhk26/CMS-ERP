@@ -442,6 +442,7 @@ export interface PurchaseRequisition {
   requestedBy: string;
   departmentId: string;
   campusId: string;
+  urgency?: 'Normal' | 'High' | 'Emergency';
   items: {
     itemId: string;
     itemName: string;

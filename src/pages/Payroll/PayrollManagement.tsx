@@ -10,9 +10,7 @@ import {
   Printer,
   CheckCircle,
   Play,
-  FileText,
   Calendar,
-  Building2,
 } from 'lucide-react';
 import { ERPTable, Column } from '../../components/common/ERPTable';
 import { StatusBadge } from '../../components/common/StatusBadge';
@@ -21,10 +19,17 @@ import { api } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import { PayrollRecord } from '../../types';
 
+const getCurrentPayrollMonth = () => {
+  const date = new Date();
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+};
+
 export const PayrollManagement: React.FC = () => {
   const { currentCampus, hasPermission } = useAuth();
   const [payrolls, setPayrolls] = useState<PayrollRecord[]>([]);
+  const [payrollMonth, setPayrollMonth] = useState(getCurrentPayrollMonth);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [generationFeedback, setGenerationFeedback] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(null);
   const [isPayslipOpen, setIsPayslipOpen] = useState(false);
   const [selectedPayroll, setSelectedPayroll] = useState<PayrollRecord | null>(null);
 
@@ -41,11 +46,30 @@ export const PayrollManagement: React.FC = () => {
   }, [currentCampus?.id]);
 
   const handleGeneratePayroll = async () => {
-    if (!confirm('Execute monthly payroll generation for active staff for March 2026?')) return;
+    if (!payrollMonth) {
+      setGenerationFeedback({ type: 'error', message: 'Select a payroll month before running payroll.' });
+      return;
+    }
+    const [year, month] = payrollMonth.split('-').map(Number);
+    const monthLabel = new Date(year, month - 1, 1).toLocaleDateString(undefined, {
+      month: 'long',
+      year: 'numeric',
+    });
+    if (!confirm(`Generate payroll for ${monthLabel} at ${currentCampus?.name || 'all campuses'}?`)) return;
     setIsGenerating(true);
+    setGenerationFeedback(null);
     try {
-      await api.generateMonthlyPayroll('March 2026');
+      const result = await api.generateMonthlyPayroll(monthLabel, currentCampus?.id);
       await loadData();
+      setGenerationFeedback({
+        type: result.data.length > 0 ? 'success' : 'info',
+        message: result.message || `Payroll for ${monthLabel} processed.`,
+      });
+    } catch (error) {
+      setGenerationFeedback({
+        type: 'error',
+        message: error instanceof Error ? error.message : 'Payroll could not be generated.',
+      });
     } finally {
       setIsGenerating(false);
     }
@@ -156,16 +180,48 @@ export const PayrollManagement: React.FC = () => {
         </div>
 
         {canRunPayroll && (
-          <button
-            onClick={handleGeneratePayroll}
-            disabled={isGenerating}
-            className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-white bg-[#DD2A2A] hover:bg-[#b91c1c] rounded-lg transition-colors shadow-xs disabled:opacity-50"
-          >
-            <Play className="w-3.5 h-3.5 fill-current" />
-            <span>{isGenerating ? 'Computing...' : 'Run Monthly Payroll'}</span>
-          </button>
+          <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+            <label className="flex items-center gap-2 text-xs font-semibold text-slate-600">
+              <Calendar className="w-4 h-4 text-slate-400" />
+              Payroll month
+              <input
+                type="month"
+                value={payrollMonth}
+                onChange={(event) => setPayrollMonth(event.target.value)}
+                className="px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:ring-1 focus:ring-[#DD2A2A]"
+              />
+            </label>
+            <button
+              onClick={handleGeneratePayroll}
+              disabled={isGenerating || !payrollMonth}
+              className="flex items-center justify-center gap-1.5 px-3.5 py-2 text-xs font-bold text-white bg-[#DD2A2A] hover:bg-[#b91c1c] rounded-lg transition-colors shadow-xs disabled:opacity-50"
+            >
+              <Play className="w-3.5 h-3.5 fill-current" />
+              <span>{isGenerating ? 'Computing...' : 'Run Monthly Payroll'}</span>
+            </button>
+          </div>
         )}
       </div>
+
+      {generationFeedback && (
+        <div className={`p-3 rounded-lg border text-xs font-semibold flex items-center justify-between ${
+          generationFeedback.type === 'success'
+            ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+            : generationFeedback.type === 'error'
+              ? 'bg-rose-50 border-rose-200 text-rose-800'
+              : 'bg-blue-50 border-blue-200 text-blue-800'
+        }`}>
+          <span>{generationFeedback.message}</span>
+          <button
+            type="button"
+            aria-label="Dismiss payroll message"
+            onClick={() => setGenerationFeedback(null)}
+            className="px-1 font-bold"
+          >
+            ×
+          </button>
+        </div>
+      )}
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">

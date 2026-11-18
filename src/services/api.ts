@@ -657,34 +657,57 @@ class ApiService {
   public async recordWebPunch(employeeId: string, type: 'checkIn' | 'checkOut'): Promise<ApiResponse<AttendanceRecord>> {
     const attendance = db.getCollection('attendance');
     const employees = db.getCollection('employees');
-    const emp = employees.find((e) => e.id === employeeId) || employees[0];
-    const today = new Date().toISOString().split('T')[0];
-    const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const emp = employees.find((e) => e.id === employeeId);
+    if (!emp) throw new Error('No matching employee is available for this attendance punch.');
 
+    const now = new Date();
+    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
     let record = attendance.find((a) => a.employeeId === emp.id && a.date === today);
 
-    if (record) {
-      if (type === 'checkOut') {
-        record.checkOut = timeStr;
-        record.workHours = 8.0;
+    if (type === 'checkIn') {
+      if (record?.checkIn) throw new Error('A check-in has already been recorded for this employee today.');
+      if (record) {
+        record.checkIn = timeStr;
+        record.status = 'Present';
+        record.source = 'Web Portal';
+      } else {
+        record = {
+          id: `att-${Date.now()}`,
+          date: today,
+          employeeId: emp.id,
+          employeeName: emp.fullName,
+          departmentId: emp.departmentId,
+          campusId: emp.campusId,
+          shiftId: 'shift-gen',
+          checkIn: timeStr,
+          workHours: 0,
+          lateMinutes: 0,
+          overtimeMinutes: 0,
+          status: 'Present',
+          source: 'Web Portal',
+        };
+        attendance.unshift(record);
       }
     } else {
-      record = {
-        id: `att-${Date.now()}`,
-        date: today,
-        employeeId: emp.id,
-        employeeName: emp.fullName,
-        departmentId: emp.departmentId,
-        campusId: emp.campusId,
-        shiftId: 'shift-gen',
-        checkIn: timeStr,
-        workHours: 0,
-        lateMinutes: 0,
-        overtimeMinutes: 0,
-        status: 'Present',
-        source: 'Web Portal',
+      if (!record?.checkIn) throw new Error('Check in before recording a check-out.');
+      if (record.checkOut) throw new Error('A check-out has already been recorded for this employee today.');
+      const toMinutes = (value: string) => {
+        const match = value.match(/^(\d{1,2}):(\d{2})(?:\s*(AM|PM))?$/i);
+        if (!match) return null;
+        let hours = Number(match[1]);
+        const minutes = Number(match[2]);
+        if (match[3]) {
+          const meridiem = match[3].toUpperCase();
+          hours = (hours % 12) + (meridiem === 'PM' ? 12 : 0);
+        }
+        return hours * 60 + minutes;
       };
-      attendance.unshift(record);
+      const checkInMinutes = toMinutes(record.checkIn);
+      if (checkInMinutes === null) throw new Error('The saved check-in time is invalid; attendance cannot be checked out.');
+      const checkOutMinutes = now.getHours() * 60 + now.getMinutes();
+      record.checkOut = timeStr;
+      record.workHours = Math.max(0, Number(((checkOutMinutes - checkInMinutes) / 60).toFixed(2)));
     }
 
     db.updateCollection('attendance', [...attendance]);
@@ -921,12 +944,16 @@ class ApiService {
     return { success: true, data: payrolls, total: payrolls.length };
   }
 
-  public async generateMonthlyPayroll(monthYear: string): Promise<ApiResponse<PayrollRecord[]>> {
-    const employees = db.getCollection('employees').filter((e) => e.status === 'Active');
+  public async generateMonthlyPayroll(monthYear: string, campusId?: string): Promise<ApiResponse<PayrollRecord[]>> {
+    const employees = db.getCollection('employees').filter(
+      (employee) => employee.status === 'Active' && (!campusId || campusId === 'all' || employee.campusId === campusId)
+    );
     const existing = db.getCollection('payroll');
     const created: PayrollRecord[] = [];
 
     for (const emp of employees) {
+      if (existing.some((record) => record.employeeId === emp.id && record.payrollMonth === monthYear)) continue;
+
       const basic = Math.round(emp.salary * 0.7);
       const medical = Math.round(emp.salary * 0.1);
       const houseRent = Math.round(emp.salary * 0.2);
@@ -964,26 +991,38 @@ class ApiService {
 
     db.updateCollection('payroll', [...existing]);
 
-    db.addNotification({
-      title: 'Monthly Payroll Processed',
-      message: `Payroll for ${monthYear} processed for ${created.length} active employees.`,
-      module: 'payroll',
-      type: 'success',
-      actionUrl: '/payroll',
-    });
+    if (created.length > 0) {
+      db.updateCollection('payroll', [...existing]);
 
-    db.addAuditLog({
-      userId: this.currentUser.id,
-      userName: this.currentUser.fullName,
-      userRole: this.currentUser.primaryRole,
-      module: 'payroll',
-      action: 'create',
-      resource: `Payroll Run: ${monthYear}`,
-      ipAddress: '127.0.0.1',
-      details: `Generated monthly payroll for ${created.length} employees`,
-    });
+      db.addNotification({
+        title: 'Monthly Payroll Processed',
+        message: `Payroll for ${monthYear} processed for ${created.length} active employees.`,
+        module: 'payroll',
+        type: 'success',
+        actionUrl: '/payroll',
+      });
 
-    return { success: true, data: created, message: `Generated payroll for ${created.length} employees` };
+      db.addAuditLog({
+        userId: this.currentUser.id,
+        userName: this.currentUser.fullName,
+        userRole: this.currentUser.primaryRole,
+        module: 'payroll',
+        action: 'create',
+        resource: `Payroll Run: ${monthYear}`,
+        ipAddress: '127.0.0.1',
+        details: `Generated monthly payroll for ${created.length} employees`,
+      });
+    }
+
+    return {
+      success: true,
+      data: created,
+      message: created.length
+        ? `Generated payroll for ${created.length} employees`
+        : employees.length
+          ? `Payroll for ${monthYear} already exists for all active employees at this campus.`
+          : 'No active employees were found for this campus.',
+    };
   }
 
   // ---------------- INVENTORY ----------------
@@ -1022,7 +1061,7 @@ class ApiService {
         {
           action: 'Submitted',
           actorName: reqData.requestedBy,
-          actorRole: 'Departmental In-Charge',
+          actorRole: this.currentUser.primaryRole,
           timestamp: new Date().toLocaleString(),
           remarks: 'Requisition submitted for institutional procurement review',
         },
@@ -1079,8 +1118,73 @@ class ApiService {
     const approvals = db.getCollection('approvals');
     const req = approvals.find((a) => a.id === approvalId);
     if (!req) throw new Error('Approval request not found');
+    if (req.status !== 'Pending Approval') {
+      throw new Error('This request is no longer pending approval.');
+    }
+    const moduleByEntity: Record<ApprovalRequest['entityType'], ERPModule> = {
+      Leave: 'hrms',
+      Marks: 'academics',
+      Requisition: 'inventory',
+      MeritList: 'admissions',
+      Payroll: 'payroll',
+      Voucher: 'finance',
+    };
+    const module = moduleByEntity[req.entityType];
+    if (!this.checkPermission(module, 'approve')) {
+      throw new Error(`Your role does not have approval permission for ${module}.`);
+    }
 
     const newStatus: WorkflowStatus = action === 'Approved' ? 'Approved' : action === 'Rejected' ? 'Rejected' : 'Reverted';
+
+    // Cascade status update to the underlying entity
+    if (req.entityType === 'Leave') {
+      const leaves = db.getCollection('leaves');
+      const target = leaves.find((l) => l.id === req.entityId);
+      if (!target) throw new Error('The leave application for this approval could not be found.');
+      target.status = newStatus;
+      target.approvedBy = this.currentUser.fullName;
+      target.approvalHistory.push({
+        action,
+        actorName: this.currentUser.fullName,
+        actorRole: this.currentUser.primaryRole,
+        timestamp: new Date().toLocaleString(),
+        remarks,
+      });
+      db.updateCollection('leaves', [...leaves]);
+    } else if (req.entityType === 'Requisition') {
+      const reqs = db.getCollection('requisitions');
+      const target = reqs.find((r) => r.id === req.entityId);
+      if (!target) throw new Error('The purchase requisition for this approval could not be found.');
+      target.status = newStatus;
+      target.approvedBy = this.currentUser.fullName;
+      db.updateCollection('requisitions', [...reqs]);
+    } else if (req.entityType === 'Voucher') {
+      const vouchers = db.getCollection('vouchers');
+      const target = vouchers.find((v) => v.id === req.entityId);
+      if (!target) throw new Error('The voucher for this approval could not be found.');
+      target.status = newStatus;
+      target.approvedBy = this.currentUser.fullName;
+      db.updateCollection('vouchers', [...vouchers]);
+    } else if (req.entityType === 'Marks') {
+      const marks = db.getCollection('marks');
+      const target = marks.find((item) => item.id === req.entityId);
+      if (!target) throw new Error('The marks record for this approval could not be found.');
+      target.status = newStatus;
+      db.updateCollection('marks', [...marks]);
+    } else if (req.entityType === 'MeritList') {
+      const meritLists = db.getCollection('meritLists');
+      const target = meritLists.find((item) => item.id === req.entityId);
+      if (!target) throw new Error('The merit list for this approval could not be found.');
+      target.status = newStatus;
+      db.updateCollection('meritLists', [...meritLists]);
+    } else if (req.entityType === 'Payroll') {
+      const payroll = db.getCollection('payroll');
+      const target = payroll.find((item) => item.id === req.entityId);
+      if (!target) throw new Error('The payroll record for this approval could not be found.');
+      target.status = newStatus;
+      db.updateCollection('payroll', [...payroll]);
+    }
+
     req.status = newStatus;
     req.history.push({
       action,
@@ -1089,47 +1193,12 @@ class ApiService {
       timestamp: new Date().toLocaleString(),
       remarks: remarks || `Action ${action} executed by ${this.currentUser.fullName}`,
     });
-
-    // Cascade status update to the underlying entity
-    if (req.entityType === 'Leave') {
-      const leaves = db.getCollection('leaves');
-      const target = leaves.find((l) => l.id === req.entityId);
-      if (target) {
-        target.status = newStatus;
-        target.approvedBy = this.currentUser.fullName;
-        target.approvalHistory.push({
-          action,
-          actorName: this.currentUser.fullName,
-          actorRole: this.currentUser.primaryRole,
-          timestamp: new Date().toLocaleString(),
-          remarks,
-        });
-        db.updateCollection('leaves', [...leaves]);
-      }
-    } else if (req.entityType === 'Requisition') {
-      const reqs = db.getCollection('requisitions');
-      const target = reqs.find((r) => r.id === req.entityId);
-      if (target) {
-        target.status = newStatus;
-        target.approvedBy = this.currentUser.fullName;
-        db.updateCollection('requisitions', [...reqs]);
-      }
-    } else if (req.entityType === 'Voucher') {
-      const vouchers = db.getCollection('vouchers');
-      const target = vouchers.find((v) => v.id === req.entityId);
-      if (target) {
-        target.status = newStatus;
-        target.approvedBy = this.currentUser.fullName;
-        db.updateCollection('vouchers', [...vouchers]);
-      }
-    }
-
     db.updateCollection('approvals', [...approvals]);
 
     db.addNotification({
       title: `Workflow Request ${action}`,
       message: `${req.title} was ${action.toLowerCase()} by ${this.currentUser.fullName}.`,
-      module: req.entityType === 'Leave' ? 'hrms' : req.entityType === 'Voucher' ? 'finance' : 'inventory',
+      module,
       type: action === 'Approved' ? 'success' : 'alert',
       actionUrl: '/approvals',
     });
@@ -1138,7 +1207,7 @@ class ApiService {
       userId: this.currentUser.id,
       userName: this.currentUser.fullName,
       userRole: this.currentUser.primaryRole,
-      module: req.entityType === 'Leave' ? 'hrms' : 'finance',
+      module,
       action: action.toLowerCase() as ActionType,
       resource: `Approval: ${req.referenceNo}`,
       ipAddress: '127.0.0.1',

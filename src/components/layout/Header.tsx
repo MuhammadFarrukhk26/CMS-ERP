@@ -6,6 +6,7 @@
 import React, { useState } from 'react';
 import {
   Bell,
+  Menu,
   Building2,
   UserCheck,
   ChevronDown,
@@ -33,9 +34,10 @@ import { exportCurrentViewToPdf } from '../../utils/pdfExport';
 interface HeaderProps {
   activeTab: string;
   onNavigateTab: (tab: string) => void;
+  onToggleSidebar: () => void;
 }
 
-export const Header: React.FC<HeaderProps> = ({ activeTab, onNavigateTab }) => {
+export const Header: React.FC<HeaderProps> = ({ activeTab, onNavigateTab, onToggleSidebar }) => {
   const {
     currentUser,
     currentCampus,
@@ -117,21 +119,31 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, onNavigateTab }) => {
   };
 
   return (
-    <header className="h-16 bg-white border-b border-slate-200 px-6 flex items-center justify-between gap-4 sticky top-0 z-30">
+    <header className="min-h-16 bg-white border-b border-slate-200 px-3 sm:px-4 flex items-center justify-between gap-2 sticky top-0 z-30 overflow-visible">
       {/* Left: Breadcrumbs */}
-      <div className="flex items-center gap-2 text-xs shrink-0">
-        <span className="font-semibold text-slate-400">Campus ERP</span>
-        <span className="text-slate-300">/</span>
-        <span className="font-bold text-slate-900 text-sm tracking-tight">{getBreadcrumb()}</span>
+      <div className="flex items-center gap-2 text-xs min-w-0 max-w-[40%] sm:max-w-[35%]">
+        <button
+          type="button"
+          onClick={onToggleSidebar}
+          aria-label="Open navigation menu"
+          className="p-1.5 -ml-1.5 rounded-md text-slate-600 hover:bg-slate-100 md:hidden"
+        >
+          <Menu className="w-4 h-4" />
+        </button>
+        <span className="font-semibold text-slate-400 whitespace-nowrap text-[11px] shrink-0">Campus ERP</span>
+        <span className="text-slate-300 whitespace-nowrap shrink-0">|</span>
+        <span className="font-bold text-slate-900 text-sm tracking-tight whitespace-nowrap overflow-hidden text-ellipsis min-w-0 max-w-full">
+          {getBreadcrumb()}
+        </span>
       </div>
 
       {/* Center: Global Cross-Module Search */}
-      <div className="flex-1 max-w-md mx-2 hidden sm:block">
+      <div className="flex-1 min-w-0 max-w-[360px] mx-1 sm:mx-2 hidden sm:block">
         <GlobalSearch onNavigateTab={onNavigateTab} />
       </div>
 
       {/* Right Controls */}
-      <div className="flex items-center gap-3 shrink-0">
+      <div className="flex items-center justify-end gap-2 sm:gap-2.5 min-w-0 shrink-0">
         {/* Mobile Global Search icon trigger fallback */}
         <div className="sm:hidden">
           <GlobalSearch onNavigateTab={onNavigateTab} />
@@ -139,15 +151,16 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, onNavigateTab }) => {
         {/* Campus Context Dropdown */}
         <div className="relative">
           <button
+            aria-label={`Select campus, current campus ${currentCampus?.name || 'All Campuses'}`}
             onClick={() => {
               setIsCampusMenuOpen(!isCampusMenuOpen);
               setIsPersonaMenuOpen(false);
             }}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg transition-colors"
+            className="flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-semibold text-slate-700 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg transition-colors max-w-[150px]"
           >
-            <Building2 className="w-3.5 h-3.5 text-[#DD2A2A]" />
-            <span className="max-w-[130px] truncate">{currentCampus?.name || 'All Campuses'}</span>
-            <ChevronDown className="w-3 h-3 text-slate-400" />
+            <Building2 className="w-3.5 h-3.5 text-[#DD2A2A] shrink-0" />
+            <span className="hidden xl:block truncate min-w-0">{currentCampus?.name || 'All Campuses'}</span>
+            <ChevronDown className="w-3 h-3 text-slate-400 shrink-0" />
           </button>
 
           {isCampusMenuOpen && (
@@ -177,16 +190,17 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, onNavigateTab }) => {
         {/* Persona Switcher Dropdown */}
         <div className="relative">
           <button
+            aria-label={`Switch role, current role ${currentUser.primaryRole}`}
             onClick={() => {
               setIsPersonaMenuOpen(!isPersonaMenuOpen);
               setIsCampusMenuOpen(false);
             }}
-            className="flex items-center gap-2 px-3 py-1.5 text-xs font-semibold text-[#DD2A2A] bg-red-50/70 hover:bg-red-100/70 border border-red-200 rounded-lg transition-colors shadow-2xs"
+            className="flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-semibold text-[#DD2A2A] bg-red-50/70 hover:bg-red-100/70 border border-red-200 rounded-lg transition-colors shadow-2xs max-w-[170px]"
             title="Switch User Role to test RBAC"
           >
-            <UserCheck className="w-3.5 h-3.5" />
-            <span>Role: {currentUser.primaryRole}</span>
-            <ChevronDown className="w-3 h-3" />
+            <UserCheck className="w-3.5 h-3.5 shrink-0" />
+            <span className="hidden lg:block truncate min-w-0">Role: {currentUser.primaryRole}</span>
+            <ChevronDown className="w-3 h-3 shrink-0" />
           </button>
 
           {isPersonaMenuOpen && (
@@ -220,9 +234,8 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, onNavigateTab }) => {
             </div>
           )}
         </div>
-
         {/* Export Current View as PDF & Print Preview Button */}
-        <button
+        {/* <button
           onClick={() => setIsPrintPreviewOpen(true)}
           disabled={isExportingPdf}
           title="Open Print Preview & Export as PDF (Toggle sections & A4 layout)"
@@ -230,28 +243,28 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, onNavigateTab }) => {
         >
           <FileDown className="w-3.5 h-3.5 text-[#DD2A2A]" />
           <span className="hidden sm:inline">Export PDF</span>
-        </button>
+        </button> */}
 
 
         {/* Reset Database Button */}
-        <button
+        {/* <button
           onClick={handleResetData}
           title="Reset database to initial seed data"
           className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
         >
           <RotateCcw className="w-4 h-4" />
-        </button>
+        </button> */}
 
         {/* Notification Bell */}
         <button
           onClick={toggleDrawer}
           title="Open Notifications"
-          className="relative p-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors"
+          className="relative p-1.5 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors"
         >
 
           <Bell className="w-4 h-4" />
           {unreadCount > 0 && (
-            <span className="absolute top-1 right-1 w-4 h-4 bg-[#DD2A2A] text-white text-[10px] font-bold rounded-full flex items-center justify-center">
+            <span className="absolute top-0 right-0 w-4 h-4 bg-[#DD2A2A] text-white text-[10px] font-bold rounded-full flex items-center justify-center">
               {unreadCount}
             </span>
           )}
@@ -265,21 +278,21 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, onNavigateTab }) => {
               setIsPersonaMenuOpen(false);
               setIsCampusMenuOpen(false);
             }}
-            className="flex items-center gap-2.5 p-1 rounded-lg hover:bg-slate-50 transition-colors text-left"
+            className="flex items-center gap-2 p-1 rounded-lg hover:bg-slate-50 transition-colors text-left min-w-0"
             title="User Profile & Account Settings"
           >
             <div className="w-8 h-8 rounded-full bg-[#DD2A2A] text-white font-bold text-xs flex items-center justify-center shrink-0 shadow-2xs">
               {currentUser.fullName.charAt(0)}
             </div>
-            <div className="hidden lg:block leading-tight">
-              <span className="text-xs font-bold text-slate-800 block truncate max-w-[140px]">
+            <div className="hidden lg:block leading-tight min-w-0">
+              <span className="text-[11px] font-bold text-slate-800 block truncate max-w-[120px] xl:max-w-[140px]">
                 {currentUser.fullName}
               </span>
-              <span className="text-[10px] text-slate-400 block truncate">
+              <span className="text-[10px] text-slate-400 block truncate max-w-[120px] xl:max-w-[140px]">
                 {currentUser.email}
               </span>
             </div>
-            <ChevronDown className="w-3 h-3 text-slate-400 hidden sm:block" />
+            <ChevronDown className="w-3 h-3 text-slate-400 hidden sm:block shrink-0" />
           </button>
 
           {/* Profile Dropdown */}

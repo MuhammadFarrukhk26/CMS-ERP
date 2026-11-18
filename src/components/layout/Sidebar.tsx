@@ -28,6 +28,8 @@ interface SidebarProps {
   setActiveTab: (tab: string) => void;
   isCollapsed: boolean;
   setIsCollapsed: (c: boolean) => void;
+  isMobileOpen: boolean;
+  onCloseMobile: () => void;
 }
 
 interface NavItem {
@@ -56,21 +58,37 @@ export const Sidebar: React.FC<SidebarProps> = ({
   setActiveTab,
   isCollapsed,
   setIsCollapsed,
+  isMobileOpen,
+  onCloseMobile,
 }) => {
-  const { canAccessModule, currentUser } = useAuth();
+  const { canAccessModule, currentUser, currentCampus } = useAuth();
 
   // Filter navigation items dynamically according to current role permissions
   const authorizedItems = NAV_ITEMS.filter((item) => {
     if (currentUser.primaryRole === 'Super Admin') return true;
+    if (item.id === 'approvals') {
+      return ['hrms', 'academics', 'admissions', 'finance', 'payroll', 'inventory'].some((module) =>
+        canAccessModule(module as ERPModule)
+      );
+    }
     return canAccessModule(item.module);
   });
 
   return (
-    <aside
-      className={`bg-white border-r border-slate-200 transition-all duration-300 flex flex-col shrink-0 select-none ${
-        isCollapsed ? 'w-20' : 'w-64'
-      }`}
-    >
+    <>
+      {isMobileOpen && (
+        <button
+          type="button"
+          aria-label="Close navigation menu"
+          onClick={onCloseMobile}
+          className="fixed inset-0 z-40 bg-slate-950/40 md:hidden"
+        />
+      )}
+      <aside
+        className={`fixed inset-y-0 left-0 z-50 bg-white border-r border-slate-200 transition-all duration-300 flex flex-col shrink-0 select-none md:static md:z-auto ${
+          isMobileOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
+        } ${isCollapsed ? 'w-64 md:w-20' : 'w-64'}`}
+      >
       {/* Brand & Crest */}
       <div className="h-16 border-b border-slate-200 px-4 flex items-center justify-between">
         <div className="flex items-center gap-3 overflow-hidden">
@@ -113,7 +131,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
           return (
             <button
               key={item.id}
-              onClick={() => setActiveTab(item.id)}
+              onClick={() => {
+                setActiveTab(item.id);
+                onCloseMobile();
+              }}
               title={isCollapsed ? item.name : undefined}
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-xs font-semibold transition-all ${
                 isActive
@@ -138,7 +159,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <div className="flex items-center gap-2.5 text-xs text-slate-600">
             <Building2 className="w-4 h-4 text-[#DD2A2A] shrink-0" />
             <div className="truncate">
-              <p className="font-bold text-slate-800 truncate">Main University Campus</p>
+              <p className="font-bold text-slate-800 truncate">{currentCampus?.name || 'University Campus'}</p>
               <p className="text-[10px] text-slate-400 truncate">Academic Year 2026-2027</p>
             </div>
           </div>
@@ -148,6 +169,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </div>
         )}
       </div>
-    </aside>
+      </aside>
+    </>
   );
 };

@@ -9,6 +9,7 @@ import { NotificationProvider } from './context/NotificationContext';
 import { Sidebar } from './components/layout/Sidebar';
 import { Header } from './components/layout/Header';
 import { NotificationDrawer } from './components/layout/NotificationDrawer';
+import { ERPModule } from './types';
 
 // Module Pages
 import { MainDashboard } from './pages/Dashboard/MainDashboard';
@@ -27,15 +28,25 @@ import { AuthPage } from './pages/Auth/AuthPage';
 function AppContent() {
   const [activeTab, setActiveTab] = useState<string>('dashboard');
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false);
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const { canAccessModule, currentUser, isAuthenticated } = useAuth();
 
   if (!isAuthenticated) {
     return <AuthPage onSuccess={() => setActiveTab('dashboard')} />;
   }
 
+  const handleNavigateTab = (tab: string) => {
+    setActiveTab(tab);
+    setIsMobileSidebarOpen(false);
+  };
+
   const renderActiveModule = () => {
     // Permission check fallback
-    if (activeTab !== 'dashboard' && currentUser.primaryRole !== 'Super Admin' && !canAccessModule(activeTab as any)) {
+    const workflowModules: ERPModule[] = ['hrms', 'academics', 'admissions', 'finance', 'payroll', 'inventory'];
+    const canAccessApprovals = workflowModules.some((module) => canAccessModule(module));
+    const canAccessActiveTab =
+      activeTab === 'approvals' ? canAccessApprovals : canAccessModule(activeTab as ERPModule);
+    if (activeTab !== 'dashboard' && currentUser.primaryRole !== 'Super Admin' && !canAccessActiveTab) {
       return (
         <div className="bg-white rounded-xl p-12 text-center border border-slate-200 max-w-lg mx-auto my-12 space-y-3">
           <div className="w-12 h-12 rounded-full bg-rose-50 text-[#DD2A2A] mx-auto flex items-center justify-center font-bold text-lg">
@@ -60,11 +71,11 @@ function AppContent() {
 
     switch (activeTab) {
       case 'dashboard':
-        return <MainDashboard onNavigateTab={setActiveTab} />;
+        return <MainDashboard onNavigateTab={handleNavigateTab} />;
       case 'hrms':
         return <EmployeeManagement />;
       case 'tms':
-        return <AttendanceManagement />;
+        return <AttendanceManagement onNavigateTab={handleNavigateTab} />;
       case 'academics':
         return <AcademicsManagement />;
       case 'admissions':
@@ -82,7 +93,7 @@ function AppContent() {
       case 'audit':
         return <AuditLogViewer />;
       default:
-        return <MainDashboard onNavigateTab={setActiveTab} />;
+        return <MainDashboard onNavigateTab={handleNavigateTab} />;
     }
   };
 
@@ -91,18 +102,24 @@ function AppContent() {
       {/* Dynamic Role-Filtered Sidebar */}
       <Sidebar
         activeTab={activeTab}
-        setActiveTab={setActiveTab}
+        setActiveTab={handleNavigateTab}
         isCollapsed={isSidebarCollapsed}
         setIsCollapsed={setIsSidebarCollapsed}
+        isMobileOpen={isMobileSidebarOpen}
+        onCloseMobile={() => setIsMobileSidebarOpen(false)}
       />
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {/* Top Header with Campus & Persona Switchers & Global Search */}
-        <Header activeTab={activeTab} onNavigateTab={setActiveTab} />
+        <Header
+          activeTab={activeTab}
+          onNavigateTab={handleNavigateTab}
+          onToggleSidebar={() => setIsMobileSidebarOpen((open) => !open)}
+        />
 
         {/* Viewport Content */}
-        <main className="flex-1 overflow-y-auto p-6">
+        <main className="flex-1 overflow-y-auto p-3 sm:p-4 lg:p-6">
           <div id="active-module-view" className="max-w-7xl mx-auto space-y-6">
             {renderActiveModule()}
           </div>
